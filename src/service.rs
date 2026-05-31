@@ -262,16 +262,14 @@ pub fn helper_stop(config_path: Option<PathBuf>) -> Result<()> {
 /// Run the privileged helper daemon that listens on a Unix domain socket.
 /// This runs as root (via LaunchDaemon) and handles start/stop/status commands
 /// from the GUI without requiring a password each time.
+///
+/// The helper also directly runs the proxy — no separate daemon process is
+/// spawned, which avoids zombie-process issues entirely.
 #[cfg(unix)]
 pub fn run_privileged_helper(config_path: Option<PathBuf>) -> Result<()> {
-    use crate::helper_ipc::{self, HelperRequest, HelperResponse};
+    use std::sync::Mutex;
 
-    // Automatically reap zombie child processes (daemon exits become zombies
-    // because the helper is their parent and doesn't explicitly wait() on them).
-    #[cfg(unix)]
-    unsafe {
-        libc::signal(libc::SIGCHLD, libc::SIG_IGN);
-    }
+    use crate::helper_ipc::{self, HelperRequest, HelperResponse};
 
     let paths = resolve_paths(config_path.clone())?;
     log_info(
@@ -280,60 +278,183 @@ pub fn run_privileged_helper(config_path: Option<PathBuf>) -> Result<()> {
         "特权辅助守护进程启动，开始监听 socket",
     );
 
+    // Shared state: holds the running proxy's shutdown channel and join handle.
+    let proxy_state: Arc<Mutex<Option<ProxyHandle>>> = Arc::new(Mutex::new(None));
     let socket = helper_ipc::socket_path();
-    let config_path = paths.config_path.clone();
 
-    helper_ipc::run_server(&socket, |request| match request {
-        HelperRequest::Start { config_path } => {
-            let resp = match helper_start(Some(config_path.clone())) {
-                Ok(()) => HelperResponse {
-                    success: true,
-                    message: "加速服务已启动".to_string(),
-                    status: None,
-                },
-                Err(e) => HelperResponse {
-                    success: false,
-                    message: format!("{e:#}"),
-                    status: None,
-                },
-            };
-            resp
-        }
-        HelperRequest::Stop { config_path } => {
-            let resp = match helper_stop(Some(config_path.clone())) {
-                Ok(()) => HelperResponse {
-                    success: true,
-                    message: "加速服务已停止".to_string(),
-                    status: None,
-                },
-                Err(e) => HelperResponse {
-                    success: false,
-                    message: format!("{e:#}"),
-                    status: None,
-                },
-            };
-            resp
-        }
-        HelperRequest::Status { config_path } => {
-            let resp = match status(Some(config_path.clone())) {
-                Ok(s) => HelperResponse {
-                    success: true,
-                    message: "ok".to_string(),
-                    status: Some(s),
-                },
-                Err(e) => HelperResponse {
-                    success: false,
-                    message: format!("{e:#}"),
-                    status: None,
-                },
-            };
-            resp
-        }
+    let ps = proxy_state.clone();
+    helper_ipc::run_server(&socket, move |request| match request {
+        HelperRequest::Start { config_path } => handle_helper_start(config_path, &ps),
+        HelperRequest::Stop { config_path } => handle_helper_stop(config_path, &ps),
+        HelperRequest::Status { config_path } => handle_helper_status(config_path, &ps),
     })?;
 
-    // Cleanup socket on exit.
+    // Cleanup socket on exit (unreachable in practice since run_server loops forever).
     let _ = std::fs::remove_file(&socket);
     Ok(())
+}
+
+/// Handle for a running proxy instance.
+#[cfg(unix)]
+struct ProxyHandle {
+    shutdown_tx: tokio::sync::watch::Sender<bool>,
+    join: std::thread::JoinHandle<()>,
+}
+
+#[cfg(unix)]
+fn handle_helper_start(
+    config_path: &std::path::Path,
+    proxy_state: &Arc<Mutex<Option<ProxyHandle>>>,
+) -> HelperResponse {
+    use crate::helper_ipc::HelperResponse;
+
+    let config_path = config_path.to_path_buf();
+
+    // If proxy is already running, stop it first.
+    {
+        let mut state = proxy_state.lock().unwrap();
+        if let Some(handle) = state.take() {
+            let _ = handle.shutdown_tx.send(true);
+            let _ = handle.join.join();
+        }
+    }
+
+    let result = (|| -> Result<()> {
+        let paths = resolve_paths(Some(config_path.clone()))?;
+        let _ = AppConfig::migrate_config_if_needed(&paths.config_path)?;
+        let config = AppConfig::load_or_create(&paths.config_path)?;
+
+        ensure_loopback_alias(&config)?;
+
+        let bundle = ensure_bundle(&config, &paths.cert_dir)?;
+
+        apply_hosts(&config, &paths)?;
+        let _ = flush_dns_cache();
+
+        let pid = std::process::id();
+        state::write_pid(&paths, pid)?;
+        state::mark_running(&paths, pid)?;
+
+        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let ps = proxy_state.clone();
+        let cfg = config.clone();
+        let p = paths.clone();
+
+        let join = std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+            rt.block_on(async move {
+                let result = run_proxy(cfg, p.clone(), bundle, shutdown_rx).await;
+                let _ = state::clear_pid_if_matches(&p, pid);
+                match &result {
+                    Ok(_) => {
+                        let _ = state::mark_stopped(&p, "加速服务已退出");
+                    }
+                    Err(error) => {
+                        let _ = state::mark_error(&p, &error.to_string());
+                    }
+                }
+            });
+            // Remove handle from shared state when proxy exits.
+            let mut s = ps.lock().unwrap();
+            *s = None;
+        });
+
+        *proxy_state.lock().unwrap() = Some(ProxyHandle {
+            shutdown_tx,
+            join,
+        });
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => HelperResponse {
+            success: true,
+            message: "加速服务已启动".to_string(),
+            status: None,
+        },
+        Err(e) => HelperResponse {
+            success: false,
+            message: format!("{e:#}"),
+            status: None,
+        },
+    }
+}
+
+#[cfg(unix)]
+fn handle_helper_stop(
+    config_path: &std::path::Path,
+    proxy_state: &Arc<Mutex<Option<ProxyHandle>>>,
+) -> HelperResponse {
+    use crate::helper_ipc::HelperResponse;
+
+    let config_path = config_path.to_path_buf();
+
+    let result = (|| -> Result<()> {
+        let paths = resolve_paths(Some(config_path.clone()))?;
+        let config = AppConfig::load_or_create(&paths.config_path)?;
+
+        // Signal proxy to shut down.
+        let handle = {
+            let mut state = proxy_state.lock().unwrap();
+            state.take()
+        };
+
+        if let Some(handle) = handle {
+            let _ = handle.shutdown_tx.send(true);
+            // Wait for proxy thread to finish (with timeout).
+            let start = std::time::Instant::now();
+            while !handle.join.is_finished() {
+                if start.elapsed() > std::time::Duration::from_secs(10) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+        }
+
+        // Clean up hosts, loopback, etc.
+        let _ = restore_hosts_after_stop(&paths);
+        let _ = remove_loopback_alias(&config);
+        let _ = state::clear_pid(&paths);
+        let _ = flush_dns_cache();
+        let _ = state::mark_stopped(&paths, "已停止");
+
+        Ok(())
+    })();
+
+    match result {
+        Ok(()) => HelperResponse {
+            success: true,
+            message: "加速服务已停止".to_string(),
+            status: None,
+        },
+        Err(e) => HelperResponse {
+            success: false,
+            message: format!("{e:#}"),
+            status: None,
+        },
+    }
+}
+
+#[cfg(unix)]
+fn handle_helper_status(
+    config_path: &std::path::Path,
+    proxy_state: &Arc<Mutex<Option<ProxyHandle>>>,
+) -> HelperResponse {
+    use crate::helper_ipc::HelperResponse;
+
+    match status(Some(config_path.to_path_buf())) {
+        Ok(s) => HelperResponse {
+            success: true,
+            message: "ok".to_string(),
+            status: Some(s),
+        },
+        Err(e) => HelperResponse {
+            success: false,
+            message: format!("{e:#}"),
+            status: None,
+        },
+    }
 }
 
 pub fn cleanup(config_path: Option<PathBuf>) -> Result<()> {
