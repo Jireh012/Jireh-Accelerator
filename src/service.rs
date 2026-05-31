@@ -266,6 +266,13 @@ pub fn helper_stop(config_path: Option<PathBuf>) -> Result<()> {
 pub fn run_privileged_helper(config_path: Option<PathBuf>) -> Result<()> {
     use crate::helper_ipc::{self, HelperRequest, HelperResponse};
 
+    // Automatically reap zombie child processes (daemon exits become zombies
+    // because the helper is their parent and doesn't explicitly wait() on them).
+    #[cfg(unix)]
+    unsafe {
+        libc::signal(libc::SIGCHLD, libc::SIG_IGN);
+    }
+
     let paths = resolve_paths(config_path.clone())?;
     log_info(
         &paths,

@@ -258,11 +258,17 @@ pub fn is_process_running(pid: u32) -> bool {
     let kill_probe = Command::new("kill").args(["-0", &pid.to_string()]).output();
 
     match kill_probe {
-        Ok(output) if output.status.success() => true,
+        Ok(output) if output.status.success() => {
+            // Process exists — but check if it's a zombie (already dead, just
+            // waiting for the parent to reap it).  Treat zombies as "not running"
+            // so that stop/cleanup can proceed without waiting for a kill timeout.
+            is_unix_zombie(pid)
+        }
         Ok(output) => {
             let stderr = String::from_utf8_lossy(&output.stderr);
             if stderr.contains("Operation not permitted") {
-                return true;
+                // Can't signal the process but it exists; still check zombie state.
+                return !is_unix_zombie(pid);
             }
 
             Command::new("ps")
@@ -276,6 +282,25 @@ pub fn is_process_running(pid: u32) -> bool {
         }
         Err(_) => false,
     }
+}
+
+/// Check if a process is a zombie (defunct) on Unix.
+#[cfg(unix)]
+fn is_unix_zombie(pid: u32) -> bool {
+    Command::new("ps")
+        .args(["-p", &pid.to_string(), "-o", "state="])
+        .output()
+        .ok()
+        .map(|out| {
+            let state = String::from_utf8_lossy(&out.stdout);
+            state.trim() == "Z"
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(not(unix))]
+fn is_unix_zombie(_pid: u32) -> bool {
+    false
 }
 
 pub fn ensure_loopback_alias(_config: &AppConfig) -> Result<()> {
