@@ -320,15 +320,21 @@ fn handle_helper_start(
     }
 
     let result = (|| -> Result<()> {
+        eprintln!("handle_helper_start: config={}", config_path.display());
         let paths = resolve_paths(Some(config_path.clone()))?;
+        eprintln!("handle_helper_start: paths resolved");
         let _ = AppConfig::migrate_config_if_needed(&paths.config_path)?;
         let config = AppConfig::load_or_create(&paths.config_path)?;
+        eprintln!("handle_helper_start: config loaded");
 
-        ensure_loopback_alias(&config)?;
+        ensure_loopback_alias(&config).context("ensure_loopback_alias failed")?;
+        eprintln!("handle_helper_start: loopback ok");
 
-        let bundle = ensure_bundle(&config, &paths.cert_dir)?;
+        let bundle = ensure_bundle(&config, &paths.cert_dir).context("ensure_bundle failed")?;
+        eprintln!("handle_helper_start: bundle ok");
 
-        apply_hosts(&config, &paths)?;
+        apply_hosts(&config, &paths).context("apply_hosts failed")?;
+        eprintln!("handle_helper_start: hosts ok");
         let _ = flush_dns_cache();
 
         let pid = std::process::id();
