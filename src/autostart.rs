@@ -322,19 +322,12 @@ fn helper_plist_path() -> std::path::PathBuf {
     std::path::PathBuf::from("/Library/LaunchDaemons").join(format!("{HELPER_LABEL}.plist"))
 }
 
-/// Check whether the privileged helper LaunchDaemon is installed and loaded.
+/// Check whether the privileged helper LaunchDaemon plist is installed.
+/// We only check plist existence — the service may not be loaded yet
+/// (launchd loads it on next boot or when explicitly started).
 #[cfg(target_os = "macos")]
 pub fn is_privileged_helper_installed() -> bool {
-    let plist = helper_plist_path();
-    if !plist.exists() {
-        return false;
-    }
-    // Also verify launchd knows about it.
-    std::process::Command::new("launchctl")
-        .args(["list", HELPER_LABEL])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+    helper_plist_path().exists()
 }
 
 /// Install the privileged helper LaunchDaemon.  Requires administrator privileges
@@ -387,10 +380,12 @@ pub fn install_privileged_helper(exe: &std::path::Path, config_path: &std::path:
     let tmp = std::env::temp_dir().join(format!("{HELPER_LABEL}.plist"));
     fs::write(&tmp, &plist).context("failed to write temporary plist")?;
 
+    let socket = crate::helper_ipc::socket_path();
     let install_script = format!(
-        "do shell script \"cp '{tmp}' '{dest}' && launchctl unload -w '{dest}' 2>/dev/null; launchctl load -w '{dest}'\" with prompt \"Linux.do Accelerator 需要安装特权辅助进程以实现免密码加速。\" with administrator privileges",
+        "do shell script \"cp '{tmp}' '{dest}' && rm -f '{sock}' && launchctl unload -w '{dest}' 2>/dev/null; launchctl load -w '{dest}'\" with prompt \"Linux.do Accelerator 需要安装特权辅助进程以实现免密码加速。\" with administrator privileges",
         tmp = tmp.display(),
         dest = plist_path.display(),
+        sock = socket.display(),
     );
 
     crate::platform::run_command("osascript", &["-e", &install_script])
@@ -402,6 +397,71 @@ pub fn install_privileged_helper(exe: &std::path::Path, config_path: &std::path:
     // Give launchd a moment to start the helper.
     std::thread::sleep(std::time::Duration::from_millis(500));
 
+    Ok(())
+}
+
+/// Ensure the privileged helper is running.  If the plist is installed but the
+/// service is not loaded (e.g. after a reboot), load it.  This requires root on
+/// macOS, so we use osascript (which will prompt for a password the first time
+/// after each reboot, but NOT on subsequent start/stop clicks within the same
+/// session — launchd keeps the service alive via KeepAlive).
+#[cfg(target_os = "macos")]
+pub fn ensure_privileged_helper_running(_config_path: &std::path::Path) -> Result<()> {
+    use std::process::Command;
+
+    let plist_path = helper_plist_path();
+    if !plist_path.exists() {
+        return Ok(());
+    }
+
+    // Try loading without elevation first (may work if already loaded).
+    let status = Command::new("launchctl")
+        .args(["load", "-w", &plist_path.to_string_lossy()])
+        .status();
+    if let Ok(s) = status {
+        if s.success() {
+            return Ok(());
+        }
+    }
+
+    // Need elevation — use osascript.
+    let script = format!(
+        "do shell script \"launchctl load -w '{plist}'\" with prompt \"Linux.do Accelerator 需要启动特权辅助进程。\" with administrator privileges",
+        plist = plist_path.display(),
+    );
+    crate::platform::run_command("osascript", &["-e", &script])
+        .context("failed to load privileged helper")?;
+
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    Ok(())
+}
+
+#[cfg(target_os = "linux")]
+pub fn ensure_privileged_helper_running(_config_path: &std::path::Path) -> Result<()> {
+    use std::process::Command;
+
+    let status = Command::new("systemctl")
+        .args(["is-active", "--quiet", HELPER_SERVICE_NAME])
+        .status();
+    if let Ok(s) = status {
+        if s.success() {
+            return Ok(());
+        }
+    }
+
+    let status = Command::new("pkexec")
+        .args(["systemctl", "start", HELPER_SERVICE_NAME])
+        .status()
+        .context("failed to execute pkexec")?;
+    if !status.success() {
+        bail!("pkexec rejected the request or systemctl failed");
+    }
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    Ok(())
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+pub fn ensure_privileged_helper_running(_config_path: &std::path::Path) -> Result<()> {
     Ok(())
 }
 

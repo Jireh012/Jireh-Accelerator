@@ -1965,6 +1965,13 @@ fn execute_action(config_path: &Path, action: GuiAction) -> Result<String> {
         if !autostart::is_privileged_helper_installed() {
             autostart::install_privileged_helper(&cli_binary, config_path)
                 .context("failed to install privileged helper")?;
+        } else {
+            // Plist exists but the service might not be loaded (e.g. after reboot).
+            // Ensure the socket exists by loading the daemon if needed.
+            let socket = helper_ipc::socket_path();
+            if !socket.exists() {
+                let _ = autostart::ensure_privileged_helper_running(config_path);
+            }
         }
 
         let socket = helper_ipc::socket_path();

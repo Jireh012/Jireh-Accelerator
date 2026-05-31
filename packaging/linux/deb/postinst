@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    update-desktop-database /usr/share/applications/ 2>/dev/null || true
+
+    # Remove stale user-level .desktop override so the system one takes effect.
+    # GNOME Shell caches .desktop content in memory; a stale override pointing
+    # to a removed binary causes "not found in PATH" errors until re-login.
+    for home_dir in /home/*; do
+        user_desktop="$home_dir/.local/share/applications/linuxdo-accelerator.desktop"
+        if [ -f "$user_desktop" ]; then
+            rm -f "$user_desktop"
+        fi
+    done
+fi
