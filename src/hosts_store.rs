@@ -713,6 +713,7 @@ mod tests {
             state_path: runtime_dir.join("service-state.json"),
             pid_path: runtime_dir.join("linuxdo-accelerator.pid"),
             ui_lease_path: runtime_dir.join("ui-lease.json"),
+            ui_window_path: runtime_dir.join("ui-window.json"),
             runtime_log_path: runtime_dir.join("operations.log"),
             hosts_backup_path: runtime_dir.join("hosts.backup"),
             hosts_backup_meta_path: runtime_dir.join("hosts.backup.json"),

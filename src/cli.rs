@@ -20,6 +20,9 @@ pub struct Cli {
     #[arg(long)]
     pub autostart: bool,
 
+    #[arg(long, hide = true)]
+    pub tray_ready_file: Option<PathBuf>,
+
     #[command(subcommand)]
     pub command: Option<Command>,
 }
@@ -149,7 +152,7 @@ pub fn run(cli: Cli) -> Result<()> {
             #[cfg(any(windows, target_os = "linux", target_os = "macos"))]
             {
                 let config_path = service::init_config(cli.config)?;
-                gui::run_tray_shell(config_path)?;
+                gui::run_tray_shell(config_path, cli.tray_ready_file)?;
             }
             #[cfg(not(any(windows, target_os = "linux", target_os = "macos")))]
             {

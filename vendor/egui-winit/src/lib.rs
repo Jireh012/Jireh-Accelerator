@@ -1365,8 +1365,14 @@ fn process_viewport_command(
         ViewportCommand::StartDrag => {
             // If `.has_focus()` is not checked on x11 the input will be permanently taken until the app is killed!
             if can_start_drag(window) {
-                if let Err(err) = window.drag_window() {
-                    log::warn!("{command:?}: {err}");
+                match window.drag_window() {
+                    Ok(()) => {
+                        #[cfg(target_os = "linux")]
+                        release_pointer_after_system_drag(egui_ctx);
+                    }
+                    Err(err) => {
+                        log::warn!("{command:?}: {err}");
+                    }
                 }
             }
         }
@@ -1550,6 +1556,15 @@ fn process_viewport_command(
             actions_requested.insert(ActionRequested::Paste);
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+fn release_pointer_after_system_drag(egui_ctx: &egui::Context) {
+    egui_ctx.input_mut(|input| {
+        if input.pointer.primary_down() {
+            input.pointer = Default::default();
+        }
+    });
 }
 
 /// Build and intitlaize a window.

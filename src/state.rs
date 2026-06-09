@@ -28,6 +28,13 @@ pub struct UiLeaseState {
     pub updated_at: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UiWindowState {
+    pub outer_x: f32,
+    pub outer_y: f32,
+    pub updated_at: u64,
+}
+
 impl Default for ServiceState {
     fn default() -> Self {
         Self {
@@ -208,6 +215,31 @@ pub fn clear_ui_lease(paths: &AppPaths) -> Result<()> {
         fs::remove_file(&paths.ui_lease_path)
             .with_context(|| format!("failed to remove {}", paths.ui_lease_path.display()))?;
     }
+    Ok(())
+}
+
+pub fn read_ui_window(paths: &AppPaths) -> Result<Option<UiWindowState>> {
+    if !paths.ui_window_path.exists() {
+        return Ok(None);
+    }
+
+    let content = fs::read_to_string(&paths.ui_window_path)
+        .with_context(|| format!("failed to read {}", paths.ui_window_path.display()))?;
+    let window = serde_json::from_str(&content)
+        .with_context(|| format!("failed to parse {}", paths.ui_window_path.display()))?;
+    Ok(Some(window))
+}
+
+pub fn write_ui_window(paths: &AppPaths, outer_x: f32, outer_y: f32) -> Result<()> {
+    let window = UiWindowState {
+        outer_x,
+        outer_y,
+        updated_at: now_ts(),
+    };
+    let content =
+        serde_json::to_string_pretty(&window).context("failed to serialize ui window state")?;
+    replace_file(&paths.ui_window_path, content.as_bytes())?;
+    sync_user_ownership(&paths.ui_window_path)?;
     Ok(())
 }
 
