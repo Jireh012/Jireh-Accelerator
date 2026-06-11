@@ -75,6 +75,7 @@ fontdb = "0.23"
 
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 eframe = { version = "0.31", default-features = false, features = ["glow", "default_fonts"] }
+raw-window-handle = "0.6"
 tray-icon = "0.19"
 winit = "0.30"
 
@@ -87,7 +88,6 @@ ksni = { version = "0.3.4", features = ["blocking"] }
 winit = "0.30"
 
 [target.'cfg(windows)'.dependencies]
-raw-window-handle = "0.6"
 windows-sys = { version = "0.61", features = [
     "Win32_Foundation",
     "Win32_Storage_FileSystem",

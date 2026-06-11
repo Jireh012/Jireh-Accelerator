@@ -1,24 +1,26 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+#[cfg(target_os = "macos")]
+use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 #[cfg(target_os = "linux")]
 use std::{fs::OpenOptions, io::Write};
 
-use anyhow::{Context, Error, Result, bail};
+use anyhow::{bail, Context, Error, Result};
 use eframe::egui::{self, FontDefinitions, FontFamily, FontId, RichText};
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-#[cfg(target_os = "windows")]
-use tray_icon::TrayIcon;
-#[cfg(target_os = "windows")]
-use tray_icon::TrayIconBuilder;
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use tray_icon::TrayIcon;
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use tray_icon::TrayIconBuilder;
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
 
 use crate::autostart;
@@ -226,37 +228,77 @@ pub fn run_tray_shell(config_path: PathBuf, _ready_file: Option<PathBuf>) -> Res
         config_path.display()
     ));
 
+    // Single-instance guard: if another tray-shell is already showing an icon,
+    // exit instead of adding a duplicate. Each minimize spawns a tray-shell and
+    // there is otherwise nothing capping how many run at once, so repeated
+    // minimize/restore cycles can leave several live icons (each restoring its
+    // own window). Fail-open: any read/parse failure falls through and shows the
+    // icon, so this can never break minimize-to-tray.
+    let tray_lock_path = std::env::temp_dir().join("linuxdo-accelerator-tray-shell.pid");
+    if let Ok(content) = std::fs::read_to_string(&tray_lock_path) {
+        if let Ok(existing_pid) = content.trim().parse::<u32>() {
+            if existing_pid != std::process::id() && linux_tray_shell_pid_alive(existing_pid) {
+                log_linux_tray_event(&format!(
+                    "another tray-shell (pid {existing_pid}) is already running; exiting to avoid a duplicate icon"
+                ));
+                return Ok(());
+            }
+        }
+    }
+    let _ = std::fs::write(&tray_lock_path, std::process::id().to_string());
+
     let (command_tx, command_rx) = mpsc::channel();
     let tray_lease_stop = spawn_ui_lease_heartbeat(config_path.clone());
     let tray = LinuxTrayShell {
         command_tx,
         icon: linux_tray_icon_pixmap(),
     };
-    let tray_handle = tray.spawn().context("failed to create Linux tray icon")?;
+    let _tray_handle = tray.spawn().context("failed to create Linux tray icon")?;
     log_linux_tray_event("tray-shell icon visible");
 
-    match command_rx.recv() {
+    let restore_error = match command_rx.recv() {
         Ok(LinuxTrayShellCommand::Restore(source)) => {
             log_linux_tray_event(source);
             tray_lease_stop.store(true, Ordering::Relaxed);
-            if let Err(error) = spawn_ui_process(&config_path) {
-                log_linux_tray_event(&format!("tray-shell restore failed: {error:#}"));
-                tray_handle.shutdown().wait();
-                return Err(error);
+            match spawn_ui_process(&config_path) {
+                Ok(()) => None,
+                Err(error) => {
+                    log_linux_tray_event(&format!("tray-shell restore failed: {error:#}"));
+                    Some(error)
+                }
             }
         }
         Ok(LinuxTrayShellCommand::Quit(source)) => {
             log_linux_tray_event(source);
             tray_lease_stop.store(true, Ordering::Relaxed);
+            None
         }
         Err(error) => {
             tray_lease_stop.store(true, Ordering::Relaxed);
-            bail!("Linux tray command channel closed: {error}");
+            log_linux_tray_event(&format!("Linux tray command channel closed: {error}"));
+            None
         }
-    }
-    tray_handle.shutdown().wait();
+    };
+
+    // Drop our single-instance lock, then force the process to exit so the
+    // tray-shell — and its tray icon — actually goes away after the handoff.
+    // ksni's graceful shutdown can block on some desktops, which would otherwise
+    // leave the process alive with a lingering, duplicate icon.
+    let _ = std::fs::remove_file(&tray_lock_path);
     log_linux_tray_event("tray-shell exit");
-    Ok(())
+    if let Some(error) = restore_error {
+        return Err(error);
+    }
+    std::process::exit(0)
+}
+
+#[cfg(target_os = "linux")]
+fn linux_tray_shell_pid_alive(pid: u32) -> bool {
+    // Confirm the PID belongs to a live linuxdo-accelerator tray-shell (not a
+    // recycled PID). /proc/<pid>/cmdline holds the NUL-separated argv.
+    std::fs::read_to_string(format!("/proc/{pid}/cmdline"))
+        .map(|cmdline| cmdline.contains("linuxdo-accelerator") && cmdline.contains("tray-shell"))
+        .unwrap_or(false)
 }
 
 #[cfg(target_os = "windows")]
@@ -429,6 +471,14 @@ static MACOS_TRAY_CONFIG_PATH: std::sync::OnceLock<std::sync::Mutex<Option<PathB
     std::sync::OnceLock::new();
 
 #[cfg(target_os = "macos")]
+static MACOS_TRAY_COMMAND_TX: std::sync::OnceLock<
+    std::sync::Mutex<Option<mpsc::Sender<TrayCommand>>>,
+> = std::sync::OnceLock::new();
+
+#[cfg(target_os = "macos")]
+static MACOS_MAIN_WINDOW_HANDLE: AtomicUsize = AtomicUsize::new(0);
+
+#[cfg(target_os = "macos")]
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 struct MacosNsPoint {
@@ -457,18 +507,17 @@ pub fn run_tray_shell(config_path: PathBuf, ready_file: Option<PathBuf>) -> Resu
     use objc::runtime::Object;
     use objc::{class, msg_send, sel, sel_impl};
 
+    let tray_lock = match macos_acquire_tray_shell_lock(ready_file.as_deref())? {
+        Some(lock) => lock,
+        None => return Ok(()),
+    };
+    let heartbeat_config_path = config_path.clone();
     let config_slot = MACOS_TRAY_CONFIG_PATH.get_or_init(|| std::sync::Mutex::new(None));
     if let Ok(mut slot) = config_slot.lock() {
         *slot = Some(config_path);
     }
 
-    let tray_lease_stop = spawn_ui_lease_heartbeat(
-        config_slot
-            .lock()
-            .ok()
-            .and_then(|slot| slot.clone())
-            .context("failed to store macOS tray config path")?,
-    );
+    let tray_lease_stop = spawn_ui_lease_heartbeat(heartbeat_config_path);
 
     unsafe {
         let app: *mut Object = msg_send![class!(NSApplication), sharedApplication];
@@ -496,11 +545,11 @@ pub fn run_tray_shell(config_path: PathBuf, ready_file: Option<PathBuf>) -> Resu
         let _: () = msg_send![button, setAccessibilityLabel: tooltip];
         let image = macos_create_status_logo_image();
         if !image.is_null() {
-            let _: () = msg_send![image, setTemplate: false];
+            let _: () = msg_send![image, setTemplate: true];
             let _: () = msg_send![button, setImage: image];
             let _: () = msg_send![button, setImagePosition: 1isize];
             let _: () = msg_send![button, setImageScaling: 3usize];
-            log_macos_tray_event("native status item configured compact app logo");
+            log_macos_tray_event("native status item configured template app logo");
         } else {
             let _: () = msg_send![button, setTitle: fallback_title];
             log_macos_tray_event("native status item image unavailable, using compact title=LDO");
@@ -516,20 +565,127 @@ pub fn run_tray_shell(config_path: PathBuf, ready_file: Option<PathBuf>) -> Resu
 
         macos_log_status_item_state(status_item, button);
         log_macos_tray_event("native status item created compact icon");
-        if let Some(path) = ready_file.as_deref() {
-            if let Err(error) = macos_write_tray_ready_file(path) {
-                log_macos_tray_event(&format!(
-                    "native status item ready signal failed: {error:#}"
-                ));
-            }
-        }
+        macos_signal_tray_ready(ready_file.as_deref(), "native status item ready");
         let _: () = msg_send![app, run];
 
         tray_lease_stop.store(true, Ordering::Relaxed);
         let _: () = msg_send![status_bar, removeStatusItem: status_item];
     }
 
-    Ok(())
+    drop(tray_lock);
+    log_macos_tray_event("native tray-shell exit");
+    std::process::exit(0)
+}
+
+#[cfg(target_os = "macos")]
+struct MacosTrayShellLock {
+    path: Option<PathBuf>,
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for MacosTrayShellLock {
+    fn drop(&mut self) {
+        if let Some(path) = self.path.take() {
+            let _ = fs::remove_file(path);
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_acquire_tray_shell_lock(ready_file: Option<&Path>) -> Result<Option<MacosTrayShellLock>> {
+    use std::io::{ErrorKind, Write as _};
+
+    let lock_path = macos_tray_shell_lock_path();
+    for _ in 0..2 {
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock_path)
+        {
+            Ok(mut file) => {
+                if let Err(error) = writeln!(file, "{}", std::process::id()) {
+                    let _ = fs::remove_file(&lock_path);
+                    log_macos_tray_event(&format!(
+                        "native tray-shell lock write failed, continuing without lock: {error}"
+                    ));
+                    return Ok(Some(MacosTrayShellLock { path: None }));
+                }
+                log_macos_tray_event(&format!(
+                    "native tray-shell lock acquired pid={}",
+                    std::process::id()
+                ));
+                return Ok(Some(MacosTrayShellLock {
+                    path: Some(lock_path),
+                }));
+            }
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => {
+                if let Some(existing_pid) = macos_live_tray_shell_pid_from_lock(&lock_path) {
+                    log_macos_tray_event(&format!(
+                        "native tray-shell pid {existing_pid} is already running; exiting duplicate helper"
+                    ));
+                    macos_signal_tray_ready(ready_file, "duplicate helper acknowledged");
+                    return Ok(None);
+                }
+                let _ = fs::remove_file(&lock_path);
+            }
+            Err(error) => {
+                log_macos_tray_event(&format!(
+                    "native tray-shell lock unavailable, continuing without lock: {error}"
+                ));
+                return Ok(Some(MacosTrayShellLock { path: None }));
+            }
+        }
+    }
+
+    log_macos_tray_event(
+        "native tray-shell stale lock could not be replaced; continuing without lock",
+    );
+    Ok(Some(MacosTrayShellLock { path: None }))
+}
+
+#[cfg(target_os = "macos")]
+fn macos_existing_tray_shell_pid() -> Option<u32> {
+    let lock_path = macos_tray_shell_lock_path();
+    let pid = macos_live_tray_shell_pid_from_lock(&lock_path);
+    if pid.is_none() {
+        let _ = fs::remove_file(lock_path);
+    }
+    pid
+}
+
+#[cfg(target_os = "macos")]
+fn macos_live_tray_shell_pid_from_lock(path: &Path) -> Option<u32> {
+    let existing_pid = fs::read_to_string(path)
+        .ok()
+        .and_then(|content| content.trim().parse::<u32>().ok())?;
+    if existing_pid != std::process::id() && macos_tray_shell_pid_alive(existing_pid) {
+        Some(existing_pid)
+    } else {
+        None
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_tray_shell_pid_alive(pid: u32) -> bool {
+    let pid_string = pid.to_string();
+    let output = std::process::Command::new("/bin/ps")
+        .args(["-ww", "-p", &pid_string, "-o", "command="])
+        .output();
+    output
+        .ok()
+        .filter(|output| output.status.success())
+        .and_then(|output| String::from_utf8(output.stdout).ok())
+        .map(|command| {
+            command.contains("tray-shell")
+                && (command.contains("linuxdo-accelerator")
+                    || command.contains("LinuxdoAcceleratorTray"))
+        })
+        .unwrap_or(false)
+}
+
+#[cfg(target_os = "macos")]
+fn macos_tray_shell_lock_path() -> PathBuf {
+    std::env::temp_dir().join("linuxdo-accelerator-macos-tray-shell.pid")
 }
 
 #[cfg(target_os = "macos")]
@@ -676,9 +832,147 @@ unsafe fn macos_configure_status_item_visibility(status_item: *mut objc::runtime
 }
 
 #[cfg(target_os = "macos")]
+unsafe fn macos_set_status_item_visible(status_item: *mut objc::runtime::Object, visible: bool) {
+    use objc::{msg_send, sel, sel_impl};
+
+    if status_item.is_null() {
+        return;
+    }
+
+    let supports_visible: bool =
+        unsafe { msg_send![status_item, respondsToSelector: sel!(setVisible:)] };
+    if supports_visible {
+        let _: () = unsafe { msg_send![status_item, setVisible: visible] };
+        return;
+    }
+
+    let button: *mut objc::runtime::Object = unsafe { msg_send![status_item, button] };
+    if !button.is_null() {
+        let _: () = unsafe { msg_send![button, setHidden: !visible] };
+        let _: () = unsafe { msg_send![button, setNeedsDisplay: true] };
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_store_tray_command_tx(sender: mpsc::Sender<TrayCommand>) {
+    let slot = MACOS_TRAY_COMMAND_TX.get_or_init(|| std::sync::Mutex::new(None));
+    if let Ok(mut slot) = slot.lock() {
+        *slot = Some(sender);
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_clear_tray_command_tx() {
+    if let Some(slot) = MACOS_TRAY_COMMAND_TX.get() {
+        if let Ok(mut slot) = slot.lock() {
+            *slot = None;
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_send_tray_command(command: TrayCommand) -> bool {
+    MACOS_TRAY_COMMAND_TX
+        .get()
+        .and_then(|slot| slot.lock().ok().and_then(|slot| slot.clone()))
+        .is_some_and(|sender| sender.send(command).is_ok())
+}
+
+#[cfg(target_os = "macos")]
+fn build_macos_tray_state(ctx: &egui::Context) -> (Option<TrayState>, Receiver<TrayCommand>) {
+    let (event_tx, event_rx) = mpsc::channel();
+    macos_store_tray_command_tx(event_tx.clone());
+
+    let menu = Menu::new();
+    let show_item = MenuItem::with_id("tray-show", "打开窗口", true, None);
+    let quit_item = MenuItem::with_id("tray-quit", "退出程序", true, None);
+    if menu
+        .append_items(&[&show_item, &PredefinedMenuItem::separator(), &quit_item])
+        .is_err()
+    {
+        macos_clear_tray_command_tx();
+        return (None, event_rx);
+    }
+
+    let tray_icon = match tray_window_icon() {
+        Ok(icon) => TrayIconBuilder::new()
+            .with_id("linuxdo-accelerator-macos-tray")
+            .with_menu(Box::new(menu))
+            .with_menu_on_left_click(false)
+            .with_tooltip("Linux.do Accelerator")
+            .with_icon(icon)
+            .with_icon_as_template(false)
+            .build()
+            .ok(),
+        Err(_) => None,
+    };
+
+    let Some(tray_icon) = tray_icon else {
+        macos_clear_tray_command_tx();
+        log_macos_tray_event("tray-icon status item creation failed");
+        return (None, event_rx);
+    };
+
+    let _ = tray_icon.set_visible(true);
+
+    let show_id = show_item.id().clone();
+    let quit_id = quit_item.id().clone();
+    let event_tx_click = event_tx.clone();
+    let ctx_menu = ctx.clone();
+    let ctx_tray = ctx.clone();
+
+    MenuEvent::set_event_handler(Some(move |event: MenuEvent| {
+        if event.id == show_id {
+            let _ = event_tx.send(TrayCommand::Restore);
+            ctx_menu.request_repaint();
+        } else if event.id == quit_id {
+            let _ = event_tx.send(TrayCommand::Quit);
+            ctx_menu.request_repaint();
+        }
+    }));
+
+    TrayIconEvent::set_event_handler(Some(move |event| match event {
+        TrayIconEvent::Click {
+            button: MouseButton::Left,
+            button_state: MouseButtonState::Up,
+            ..
+        }
+        | TrayIconEvent::DoubleClick {
+            button: MouseButton::Left,
+            ..
+        } => {
+            let _ = event_tx_click.send(TrayCommand::Restore);
+            ctx_tray.request_repaint();
+        }
+        _ => {}
+    }));
+
+    log_macos_tray_event("tray-icon status item created visible color icon");
+    (
+        Some(TrayState {
+            tray_icon,
+            visible: true,
+        }),
+        event_rx,
+    )
+}
+
+#[cfg(target_os = "macos")]
 fn macos_write_tray_ready_file(path: &Path) -> Result<()> {
     fs::write(path, format!("ready pid={}\n", std::process::id()))
         .with_context(|| format!("failed to write macOS tray ready file {}", path.display()))
+}
+
+#[cfg(target_os = "macos")]
+fn macos_signal_tray_ready(path: Option<&Path>, source: &str) {
+    let Some(path) = path else {
+        return;
+    };
+
+    match macos_write_tray_ready_file(path) {
+        Ok(()) => log_macos_tray_event(&format!("{source}: {}", path.display())),
+        Err(error) => log_macos_tray_event(&format!("{source} signal failed: {error:#}")),
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -740,6 +1034,12 @@ fn macos_restore_from_native_tray() {
     use objc::{class, msg_send, sel, sel_impl};
 
     log_macos_tray_event("native status item restore clicked");
+    if macos_send_tray_command(TrayCommand::Restore) {
+        macos_set_activation_policy_regular();
+        macos_restore_app_window();
+        return;
+    }
+
     if let Some(config_path) = MACOS_TRAY_CONFIG_PATH
         .get()
         .and_then(|slot| slot.lock().ok().and_then(|slot| slot.clone()))
@@ -784,6 +1084,12 @@ struct AcceleratorApp {
     hidden_to_tray: bool,
     #[cfg(target_os = "macos")]
     last_minimized: bool,
+    #[cfg(target_os = "macos")]
+    tray: Option<TrayState>,
+    #[cfg(target_os = "macos")]
+    tray_rx: Receiver<TrayCommand>,
+    #[cfg(target_os = "macos")]
+    window_handle: Option<usize>,
     #[cfg(target_os = "windows")]
     tray: Option<TrayState>,
     #[cfg(target_os = "windows")]
@@ -804,10 +1110,38 @@ enum UiPage {
 
 #[cfg(target_os = "windows")]
 struct TrayState {
-    tray_icon: tray_icon::TrayIcon,
+    tray_icon: TrayIcon,
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(target_os = "macos")]
+struct TrayState {
+    tray_icon: TrayIcon,
+    visible: bool,
+}
+
+#[cfg(target_os = "macos")]
+impl TrayState {
+    fn set_visible(&mut self, visible: bool) {
+        if self.visible == visible {
+            return;
+        }
+        let _ = self.tray_icon.set_visible(visible);
+        self.visible = visible;
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for TrayState {
+    fn drop(&mut self) {
+        let _ = self.tray_icon.set_visible(false);
+        TrayIconEvent::set_event_handler::<fn(TrayIconEvent)>(None);
+        MenuEvent::set_event_handler::<fn(MenuEvent)>(None);
+        macos_clear_tray_command_tx();
+    }
+}
+
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+#[derive(Debug, Clone, Copy)]
 enum TrayCommand {
     Restore,
     Quit,
@@ -854,6 +1188,12 @@ impl AcceleratorApp {
         }
         #[cfg(target_os = "windows")]
         let (tray, tray_rx) = build_windows_tray_state(&cc.egui_ctx, window_handle);
+        #[cfg(target_os = "macos")]
+        let window_handle = capture_macos_window_handle(cc);
+        #[cfg(target_os = "macos")]
+        macos_store_main_window_handle(window_handle);
+        #[cfg(target_os = "macos")]
+        let (tray, tray_rx) = build_macos_tray_state(&cc.egui_ctx);
         Self {
             config_path,
             config,
@@ -885,6 +1225,12 @@ impl AcceleratorApp {
             hidden_to_tray: false,
             #[cfg(target_os = "macos")]
             last_minimized: false,
+            #[cfg(target_os = "macos")]
+            tray,
+            #[cfg(target_os = "macos")]
+            tray_rx,
+            #[cfg(target_os = "macos")]
+            window_handle,
             #[cfg(target_os = "windows")]
             tray,
             #[cfg(target_os = "windows")]
@@ -2066,6 +2412,13 @@ impl AcceleratorApp {
 
     #[cfg(target_os = "linux")]
     fn minimize_to_tray(&mut self, ctx: &egui::Context) {
+        // Guard against re-entry: once we've handed off to a tray-shell process,
+        // ignore further presses. Otherwise, if the window has not finished
+        // closing yet, each extra click on the ↧ button spawns another tray-shell
+        // (multiple icons, each of which restores its own window).
+        if self.hidden_to_tray {
+            return;
+        }
         self.save_window_position(ctx);
         match spawn_tray_shell(&self.config_path) {
             Ok(()) => {
@@ -2094,7 +2447,25 @@ impl AcceleratorApp {
 
     #[cfg(target_os = "macos")]
     fn minimize_to_tray(&mut self, ctx: &egui::Context) {
+        if self.hidden_to_tray {
+            return;
+        }
         self.save_window_position(ctx);
+        if let Some(tray) = &mut self.tray {
+            tray.set_visible(true);
+            log_macos_tray_event("in-process minimize: tray item visible, hiding window");
+            self.hidden_to_tray = true;
+            self.last_minimized = true;
+            macos_set_activation_policy_accessory();
+            if !macos_hide_app_window(self.window_handle) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
+            }
+            ctx.request_repaint();
+            return;
+        }
+
+        // Fallback for unusual AppKit failures: keep the older helper-based
+        // tray path available even though the normal path is now in-process.
         match spawn_macos_tray_shell(&self.config_path) {
             Ok(()) => {
                 self.hidden_to_tray = true;
@@ -2144,14 +2515,34 @@ impl AcceleratorApp {
         ctx.request_repaint();
     }
 
-    #[cfg(target_os = "windows")]
+    #[cfg(target_os = "macos")]
+    fn restore_from_tray(&mut self, ctx: &egui::Context) {
+        self.hidden_to_tray = false;
+        self.last_minimized = true;
+        // The macOS status item is kept resident. Hiding it on restore can make
+        // a later tray minimize unrecoverable if SystemUIServer ignores the
+        // next setVisible(true).
+        log_macos_tray_event("in-process restore: showing window");
+        macos_set_activation_policy_regular();
+        macos_restore_app_window();
+        ctx.send_viewport_cmd(egui::ViewportCommand::Visible(true));
+        ctx.send_viewport_cmd(egui::ViewportCommand::Focus);
+        ctx.request_repaint();
+    }
+
+    #[cfg(any(target_os = "windows", target_os = "macos"))]
     fn poll_tray_events(&mut self, ctx: &egui::Context) {
         while let Ok(command) = self.tray_rx.try_recv() {
             match command {
                 TrayCommand::Restore => self.restore_from_tray(ctx),
                 TrayCommand::Quit => {
+                    #[cfg(target_os = "windows")]
                     if let Some(tray) = &self.tray {
                         let _ = tray.tray_icon.set_visible(false);
+                    }
+                    #[cfg(target_os = "macos")]
+                    if let Some(tray) = &mut self.tray {
+                        tray.set_visible(false);
                     }
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
@@ -2238,7 +2629,7 @@ impl AcceleratorApp {
 
 impl eframe::App for AcceleratorApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        #[cfg(target_os = "windows")]
+        #[cfg(any(target_os = "windows", target_os = "macos"))]
         {
             self.poll_tray_events(ctx);
         }
@@ -2629,6 +3020,12 @@ fn spawn_macos_tray_shell(config_path: &Path) -> Result<()> {
         .context("failed to locate LinuxdoAcceleratorTray.app in this application bundle")?;
     if !helper_app.exists() {
         bail!("macOS tray helper is missing: {}", helper_app.display());
+    }
+    if let Some(existing_pid) = macos_existing_tray_shell_pid() {
+        log_macos_tray_event(&format!(
+            "macOS tray helper already running pid={existing_pid}; reusing existing tray icon"
+        ));
+        return Ok(());
     }
 
     let ready_file = macos_tray_ready_file_path();
@@ -3399,7 +3796,7 @@ fn build_windows_tray_state(
     (Some(TrayState { tray_icon }), event_rx)
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(any(target_os = "windows", target_os = "macos"))]
 fn tray_window_icon() -> Result<tray_icon::Icon> {
     let icon = branding::icon_data(64);
     tray_icon::Icon::from_rgba(icon.rgba, icon.width, icon.height)
@@ -3425,6 +3822,84 @@ fn capture_native_window_handle(cc: &eframe::CreationContext<'_>) -> Option<isiz
     match cc.window_handle().ok()?.as_raw() {
         RawWindowHandle::Win32(handle) => Some(handle.hwnd.get()),
         _ => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn capture_macos_window_handle(cc: &eframe::CreationContext<'_>) -> Option<usize> {
+    use objc::{msg_send, sel, sel_impl};
+
+    match cc.window_handle().ok()?.as_raw() {
+        RawWindowHandle::AppKit(handle) => unsafe {
+            let ns_view = handle.ns_view.as_ptr() as *mut objc::runtime::Object;
+            let ns_window: *mut objc::runtime::Object = msg_send![ns_view, window];
+            (!ns_window.is_null()).then_some(ns_window as usize)
+        },
+        _ => None,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn macos_store_main_window_handle(window_handle: Option<usize>) {
+    MACOS_MAIN_WINDOW_HANDLE.store(window_handle.unwrap_or_default(), Ordering::Relaxed);
+}
+
+#[cfg(target_os = "macos")]
+fn macos_main_window_ptr(window_handle: Option<usize>) -> *mut objc::runtime::Object {
+    window_handle.unwrap_or_else(|| MACOS_MAIN_WINDOW_HANDLE.load(Ordering::Relaxed))
+        as *mut objc::runtime::Object
+}
+
+#[cfg(target_os = "macos")]
+fn macos_hide_app_window(window_handle: Option<usize>) -> bool {
+    use objc::{msg_send, sel, sel_impl};
+
+    let window = macos_main_window_ptr(window_handle);
+    if window.is_null() {
+        return false;
+    }
+
+    unsafe {
+        let _: () = msg_send![window, orderOut: std::ptr::null_mut::<objc::runtime::Object>()];
+    }
+    true
+}
+
+#[cfg(target_os = "macos")]
+fn macos_restore_app_window() -> bool {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    let window = macos_main_window_ptr(None);
+    unsafe {
+        let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
+        let _: () = msg_send![app, activateIgnoringOtherApps: true];
+        if window.is_null() {
+            return false;
+        }
+        let _: () = msg_send![window, deminiaturize: std::ptr::null_mut::<objc::runtime::Object>()];
+        let _: () =
+            msg_send![window, makeKeyAndOrderFront: std::ptr::null_mut::<objc::runtime::Object>()];
+    }
+    true
+}
+
+#[cfg(target_os = "macos")]
+fn macos_set_activation_policy_regular() {
+    macos_set_activation_policy(0);
+}
+
+#[cfg(target_os = "macos")]
+fn macos_set_activation_policy_accessory() {
+    macos_set_activation_policy(1);
+}
+
+#[cfg(target_os = "macos")]
+fn macos_set_activation_policy(policy: isize) {
+    use objc::{class, msg_send, sel, sel_impl};
+
+    unsafe {
+        let app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
+        let _: bool = msg_send![app, setActivationPolicy: policy];
     }
 }
 
