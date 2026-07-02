@@ -98,32 +98,113 @@ pub fn run(config_path: PathBuf, auto_start: bool) -> Result<()> {
     if let Some(position) = restored_window_position {
         viewport = viewport.with_position(position);
     }
-    let native_options = eframe::NativeOptions {
-        renderer: default_renderer(),
-        viewport,
-        #[cfg(target_os = "linux")]
-        event_loop_builder: linux_event_loop_builder(),
-        persist_window: false,
-        ..Default::default()
-    };
+    let mut errors = Vec::new();
+    for renderer in renderer_attempt_order() {
+        let native_options = eframe::NativeOptions {
+            renderer,
+            viewport: viewport.clone(),
+            #[cfg(target_os = "linux")]
+            event_loop_builder: linux_event_loop_builder(),
+            persist_window: false,
+            ..Default::default()
+        };
+        let config_path = config_path.clone();
+        match eframe::run_native(
+            "Jireh Accelerator",
+            native_options,
+            Box::new(move |cc| {
+                Ok(Box::new(AcceleratorApp::new(
+                    config_path.clone(),
+                    auto_start,
+                    !restored_window_position_available,
+                    cc,
+                )))
+            }),
+        ) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                let message = format!("{renderer:?}: {error}");
+                eprintln!("GUI renderer failed: {message}");
+                errors.push(message);
+            }
+        }
+    }
 
-    eframe::run_native(
-        "Jireh Accelerator",
-        native_options,
-        Box::new(move |cc| {
-            Ok(Box::new(AcceleratorApp::new(
-                config_path.clone(),
-                auto_start,
-                !restored_window_position_available,
-                cc,
-            )))
-        }),
-    )
-    .map_err(|error| anyhow::anyhow!(error.to_string()))
+    let message = if errors.is_empty() {
+        "GUI failed to start".to_string()
+    } else {
+        format!("GUI failed to start:\n{}", errors.join("\n"))
+    };
+    notify_gui_startup_error(&message);
+    Err(anyhow::anyhow!(message))
 }
 
-fn default_renderer() -> eframe::Renderer {
-    eframe::Renderer::Glow
+fn renderer_attempt_order() -> Vec<eframe::Renderer> {
+    if let Some(renderer) = configured_renderer() {
+        return vec![renderer];
+    }
+
+    default_renderer_attempt_order()
+}
+
+fn default_renderer_attempt_order() -> Vec<eframe::Renderer> {
+    #[cfg(target_os = "windows")]
+    {
+        // Windows desktop and CI-built installers should prefer DirectX over OpenGL.
+        vec![eframe::Renderer::Wgpu, eframe::Renderer::Glow]
+    }
+    #[cfg(target_os = "macos")]
+    {
+        vec![eframe::Renderer::Wgpu, eframe::Renderer::Glow]
+    }
+    #[cfg(target_os = "linux")]
+    {
+        vec![eframe::Renderer::Glow, eframe::Renderer::Wgpu]
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn notify_gui_startup_error(message: &str) {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+
+    use windows_sys::Win32::UI::WindowsAndMessaging::{MB_ICONERROR, MB_OK, MessageBoxW};
+
+    fn wide(value: &str) -> Vec<u16> {
+        OsStr::new(value).encode_wide().chain(Some(0)).collect()
+    }
+
+    let title = wide("Jireh Accelerator");
+    let text = wide(message);
+    unsafe {
+        MessageBoxW(
+            std::ptr::null_mut(),
+            text.as_ptr(),
+            title.as_ptr(),
+            MB_OK | MB_ICONERROR,
+        );
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn notify_gui_startup_error(message: &str) {
+    eprintln!("{message}");
+}
+
+fn configured_renderer() -> Option<eframe::Renderer> {
+    match std::env::var("JIREH_EGUI_RENDERER")
+        .ok()
+        .map(|value| value.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("glow" | "opengl") => Some(eframe::Renderer::Glow),
+        Some("wgpu" | "dx12" | "vulkan" | "metal") => Some(eframe::Renderer::Wgpu),
+        Some(other) => {
+            eprintln!("unknown JIREH_EGUI_RENDERER={other}, using default renderer order");
+            None
+        }
+        None => None,
+    }
 }
 
 #[cfg(target_os = "linux")]

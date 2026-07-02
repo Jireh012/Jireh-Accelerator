@@ -1,6 +1,6 @@
 [package]
 name = "jireh-accelerator"
-version = "0.1.16"
+version = "0.1.17"
 edition = "2024"
 build = "build.rs"
 authors = ["fjh1997 <549308442@qq.com>"]
@@ -75,7 +75,7 @@ fontdb = "0.23"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
-eframe = { version = "0.31", default-features = false, features = ["glow", "default_fonts"] }
+eframe = { version = "0.31", default-features = false, features = ["glow", "wgpu", "default_fonts"] }
 raw-window-handle = "0.6"
 tray-icon = "0.19"
 winit = "0.30"
@@ -84,7 +84,7 @@ winit = "0.30"
 objc = "0.2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
-eframe = { version = "0.31", default-features = false, features = ["glow", "default_fonts", "x11", "wayland"] }
+eframe = { version = "0.31", default-features = false, features = ["glow", "wgpu", "default_fonts", "x11", "wayland"] }
 ksni = { version = "0.3.4", features = ["blocking"] }
 winit = "0.30"
 
