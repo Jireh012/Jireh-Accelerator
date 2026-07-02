@@ -4,12 +4,12 @@ use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
 use crate::platform::{is_elevated, run_elevated};
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 
 #[cfg(target_os = "macos")]
-const AUTOSTART_LABEL: &str = "io.linuxdo.accelerator";
+const AUTOSTART_LABEL: &str = "io.jireh.accelerator";
 #[cfg(any(target_os = "windows", target_os = "linux"))]
-const AUTOSTART_DISPLAY_NAME: &str = "Linux.do Accelerator";
+const AUTOSTART_DISPLAY_NAME: &str = "Jireh Accelerator";
 #[cfg(target_os = "windows")]
 const AUTOSTART_TASK_NAME: &str = AUTOSTART_DISPLAY_NAME;
 #[cfg(any(target_os = "windows", target_os = "macos", target_os = "linux"))]
@@ -315,7 +315,7 @@ fn xml_escape(value: &str) -> String {
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "macos")]
-const HELPER_LABEL: &str = "io.linuxdo.accelerator.helper";
+const HELPER_LABEL: &str = "io.jireh.accelerator.helper";
 
 #[cfg(target_os = "macos")]
 fn helper_plist_path() -> std::path::PathBuf {
@@ -369,12 +369,6 @@ pub fn install_privileged_helper(exe: &std::path::Path, config_path: &std::path:
     );
 
     // Write the plist and load it via an elevated osascript call (one-time prompt).
-    let script = format!(
-        "do shell script \"mkdir -p /Library/LaunchDaemons && cat > {plist_path} <<'PLIST_EOF'\n{plist}\nPLIST_EOF\nlaunchctl unload -w {plist_path} 2>/dev/null; launchctl load -w {plist_path}\" with prompt \"Linux.do Accelerator 需要安装特权辅助进程以实现免密码加速。\" with administrator privileges",
-        plist_path = plist_path.display(),
-        plist = plist,
-    );
-
     // We need to write the plist content through osascript because the target
     // directory is root-owned.  Use a temp file approach for reliability.
     let tmp = std::env::temp_dir().join(format!("{HELPER_LABEL}.plist"));
@@ -382,7 +376,7 @@ pub fn install_privileged_helper(exe: &std::path::Path, config_path: &std::path:
 
     let socket = crate::helper_ipc::socket_path();
     let install_script = format!(
-        "do shell script \"cp '{tmp}' '{dest}' && rm -f '{sock}' && launchctl unload -w '{dest}' 2>/dev/null; launchctl load -w '{dest}'\" with prompt \"Linux.do Accelerator 需要安装特权辅助进程以实现免密码加速。\" with administrator privileges",
+        "do shell script \"cp '{tmp}' '{dest}' && rm -f '{sock}' && launchctl unload -w '{dest}' 2>/dev/null; launchctl load -w '{dest}'\" with prompt \"Jireh Accelerator 需要安装特权辅助进程以实现免密码加速。\" with administrator privileges",
         tmp = tmp.display(),
         dest = plist_path.display(),
         sock = socket.display(),
@@ -426,7 +420,7 @@ pub fn ensure_privileged_helper_running(_config_path: &std::path::Path) -> Resul
 
     // Need elevation — use osascript.
     let script = format!(
-        "do shell script \"launchctl load -w '{plist}'\" with prompt \"Linux.do Accelerator 需要启动特权辅助进程。\" with administrator privileges",
+        "do shell script \"launchctl load -w '{plist}'\" with prompt \"Jireh Accelerator 需要启动特权辅助进程。\" with administrator privileges",
         plist = plist_path.display(),
     );
     crate::platform::run_command("osascript", &["-e", &script])
@@ -474,7 +468,7 @@ pub fn uninstall_privileged_helper() -> Result<()> {
     }
 
     let script = format!(
-        "do shell script \"launchctl unload -w '{plist}' 2>/dev/null; rm -f '{plist}'\" with prompt \"Linux.do Accelerator 需要卸载特权辅助进程。\" with administrator privileges",
+        "do shell script \"launchctl unload -w '{plist}' 2>/dev/null; rm -f '{plist}'\" with prompt \"Jireh Accelerator 需要卸载特权辅助进程。\" with administrator privileges",
         plist = plist_path.display(),
     );
 
@@ -488,7 +482,7 @@ pub fn uninstall_privileged_helper() -> Result<()> {
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "linux")]
-const HELPER_SERVICE_NAME: &str = "linuxdo-accelerator-helper";
+const HELPER_SERVICE_NAME: &str = "jireh-accelerator-helper";
 
 #[cfg(target_os = "linux")]
 fn helper_service_path() -> Result<PathBuf> {
@@ -524,7 +518,7 @@ pub fn install_privileged_helper(exe: &std::path::Path, config_path: &std::path:
 
     let unit = format!(
         r#"[Unit]
-Description=Linux.do Accelerator Privileged Helper
+Description=Jireh Accelerator Privileged Helper
 After=network.target
 
 [Service]
@@ -631,7 +625,7 @@ fn platform_enable(exe: &Path, config_path: &Path) -> Result<()> {
     );
 
     let contents = format!(
-        "[Desktop Entry]\nType=Application\nName={name}\nExec={exec}\nIcon=linuxdo-accelerator\nTerminal=false\nStartupNotify=false\nX-GNOME-Autostart-enabled=true\n",
+        "[Desktop Entry]\nType=Application\nName={name}\nExec={exec}\nIcon=jireh-accelerator\nTerminal=false\nStartupNotify=false\nX-GNOME-Autostart-enabled=true\n",
         name = AUTOSTART_DISPLAY_NAME,
         exec = exec,
     );
@@ -668,7 +662,7 @@ fn linux_desktop_path() -> Result<PathBuf> {
         .context("failed to resolve user config directory")?;
     Ok(config_home
         .join("autostart")
-        .join("linuxdo-accelerator.desktop"))
+        .join("jireh-accelerator.desktop"))
 }
 
 #[cfg(target_os = "linux")]

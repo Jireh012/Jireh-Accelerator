@@ -1,5 +1,5 @@
 [package]
-name = "linuxdo-accelerator"
+name = "jireh-accelerator"
 version = "0.1.14"
 edition = "2024"
 build = "build.rs"
@@ -8,12 +8,12 @@ license = "MIT"
 description = "Native Rust linux.do accelerator with CLI and desktop shell"
 
 [package.metadata.packager]
-product-name = "Linux.do Accelerator"
-identifier = "io.linuxdo.accelerator"
+product-name = "Jireh Accelerator"
+identifier = "io.jireh.accelerator"
 out-dir = "./dist"
 binaries-dir = "./target/release"
 formats = ["deb", "dmg", "nsis"]
-before-packaging-command = "cargo build --release --bin linuxdo-accelerator"
+before-packaging-command = "cargo build --release --bin jireh-accelerator"
 publisher = "linux.do"
 description = "Native Rust linux.do accelerator desktop app"
 long-description = """
@@ -24,7 +24,7 @@ category = "DeveloperTool"
 icons = ["assets/icons/linuxdo.ico", "assets/icons/*.png"]
 
 [[package.metadata.packager.binaries]]
-path = "linuxdo-accelerator"
+path = "jireh-accelerator"
 main = true
 
 [package.metadata.packager.linux]
@@ -41,8 +41,8 @@ application-folder-position = { x = 560, y = 220 }
 
 [package.metadata.packager.deb]
 section = "utils"
-package-name = "linuxdo-accelerator"
-desktop-template = "packaging/linux/linuxdo-accelerator.desktop.hbs"
+package-name = "jireh-accelerator"
+desktop-template = "packaging/linux/jireh-accelerator.desktop.hbs"
 depends = ["libgtk-3-0", "libxdo3"]
 
 [package.metadata.packager.nsis]
@@ -72,6 +72,7 @@ time = { version = "0.3", default-features = false, features = ["std"] }
 x509-parser = "0.16"
 md5 = "0.7"
 fontdb = "0.23"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }
 
 [target.'cfg(any(windows, target_os = "macos"))'.dependencies]
 eframe = { version = "0.31", default-features = false, features = ["glow", "default_fonts"] }

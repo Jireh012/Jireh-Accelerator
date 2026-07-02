@@ -1,4 +1,4 @@
-package io.linuxdo.accelerator.android
+package io.jireh.accelerator.android
 
 import android.app.Activity
 import android.content.BroadcastReceiver

@@ -76,7 +76,7 @@ jobs:
         run: cargo test --release --locked --lib
 
       - name: Build app binary
-        run: cargo build --release --locked --bin linuxdo-accelerator
+        run: cargo build --release --locked --bin jireh-accelerator
 
   build-android:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
@@ -142,7 +142,7 @@ jobs:
           ANDROID_ABI: ${{ matrix.abi }}
           RUST_TARGET: ${{ matrix.rust_target }}
           ANDROID_BUILD_TYPE: release
-          APK_OUTPUT_NAME: linuxdo-accelerator-${{ matrix.abi }}.apk
+          APK_OUTPUT_NAME: jireh-accelerator-${{ matrix.abi }}.apk
         run: |
           export ANDROID_NDK_HOME="${ANDROID_SDK_ROOT}/ndk/27.2.12479018"
           ./scripts/build-android-apk.sh

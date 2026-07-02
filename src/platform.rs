@@ -50,7 +50,7 @@ use windows_sys::Win32::UI::WindowsAndMessaging::{
     WM_SETICON,
 };
 
-const LINUX_CA_FILE_NAME: &str = "linuxdo-accelerator-root-ca.crt";
+const LINUX_CA_FILE_NAME: &str = "jireh-accelerator-root-ca.crt";
 
 #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
 enum MacosCaState {
@@ -1377,7 +1377,7 @@ fn find_spawned_windows_child(parent_pid: u32, executable_name: &str) -> Result<
 fn run_macos_elevated(executable: &Path, args: &[String]) -> Result<()> {
     let command_line = shell_join(executable, args);
     let prompt =
-        "Linux.do Accelerator 需要管理员权限来安装证书、更新 hosts 并监听本地 80/443 端口。";
+        "Jireh Accelerator 需要管理员权限来安装证书、更新 hosts 并监听本地 80/443 端口。";
     let script = format!(
         "do shell script \"{}\" with prompt \"{}\" with administrator privileges",
         applescript_escape(&command_line),
@@ -1548,7 +1548,7 @@ fn run_macos_sudo_prompt(executable: &Path, args: &[String]) -> Result<()> {
 #[cfg(target_os = "macos")]
 fn prompt_macos_administrator_password() -> Result<String> {
     let script = format!(
-        "text returned of (display dialog \"{}\" with title \"Linux.do Accelerator\" default answer \"\" with hidden answer buttons {{\"取消\", \"继续\"}} default button \"继续\")",
+        "text returned of (display dialog \"{}\" with title \"Jireh Accelerator\" default answer \"\" with hidden answer buttons {{\"取消\", \"继续\"}} default button \"继续\")",
         applescript_escape(
             "请输入 macOS 管理员密码，用于安装证书、更新 hosts 并监听本地 80/443 端口。"
         ),

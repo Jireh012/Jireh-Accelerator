@@ -38,8 +38,8 @@ use crate::runtime_log::{append as append_runtime_log, read_recent_lines};
 use crate::service;
 use crate::state::{self, ServiceState};
 
-const APP_WINDOW_TITLE: &str = "Linux.do Accelerator";
-const APP_ID: &str = "linuxdo-accelerator";
+const APP_WINDOW_TITLE: &str = "Jireh Accelerator";
+const APP_ID: &str = "jireh-accelerator";
 const APP_VERSION: &str = match option_env!("LINUXDO_BUILD_VERSION") {
     Some(version) => version,
     None => env!("CARGO_PKG_VERSION"),
@@ -108,7 +108,7 @@ pub fn run(config_path: PathBuf, auto_start: bool) -> Result<()> {
     };
 
     eframe::run_native(
-        "Linux.do Accelerator",
+        "Jireh Accelerator",
         native_options,
         Box::new(move |cc| {
             Ok(Box::new(AcceleratorApp::new(
@@ -163,7 +163,7 @@ pub fn run_tray_shell(config_path: PathBuf, _ready_file: Option<PathBuf>) -> Res
 
     impl ksni::Tray for LinuxTrayShell {
         fn id(&self) -> String {
-            "linuxdo-accelerator-tray-shell".into()
+            "jireh-accelerator-tray-shell".into()
         }
 
         fn title(&self) -> String {
@@ -234,7 +234,7 @@ pub fn run_tray_shell(config_path: PathBuf, _ready_file: Option<PathBuf>) -> Res
     // minimize/restore cycles can leave several live icons (each restoring its
     // own window). Fail-open: any read/parse failure falls through and shows the
     // icon, so this can never break minimize-to-tray.
-    let tray_lock_path = std::env::temp_dir().join("linuxdo-accelerator-tray-shell.pid");
+    let tray_lock_path = std::env::temp_dir().join("jireh-accelerator-tray-shell.pid");
     if let Ok(content) = std::fs::read_to_string(&tray_lock_path) {
         if let Ok(existing_pid) = content.trim().parse::<u32>() {
             if existing_pid != std::process::id() && linux_tray_shell_pid_alive(existing_pid) {
@@ -294,10 +294,10 @@ pub fn run_tray_shell(config_path: PathBuf, _ready_file: Option<PathBuf>) -> Res
 
 #[cfg(target_os = "linux")]
 fn linux_tray_shell_pid_alive(pid: u32) -> bool {
-    // Confirm the PID belongs to a live linuxdo-accelerator tray-shell (not a
+    // Confirm the PID belongs to a live jireh-accelerator tray-shell (not a
     // recycled PID). /proc/<pid>/cmdline holds the NUL-separated argv.
     std::fs::read_to_string(format!("/proc/{pid}/cmdline"))
-        .map(|cmdline| cmdline.contains("linuxdo-accelerator") && cmdline.contains("tray-shell"))
+        .map(|cmdline| cmdline.contains("jireh-accelerator") && cmdline.contains("tray-shell"))
         .unwrap_or(false)
 }
 
@@ -345,10 +345,10 @@ pub fn run_tray_shell(config_path: PathBuf, _ready_file: Option<PathBuf>) -> Res
             ])?;
 
             let mut tray_icon_builder = TrayIconBuilder::new()
-                .with_id("linuxdo-accelerator-tray-shell")
+                .with_id("jireh-accelerator-tray-shell")
                 .with_menu(Box::new(menu))
                 .with_menu_on_left_click(false)
-                .with_tooltip("Linux.do Accelerator");
+                .with_tooltip("Jireh Accelerator");
             #[cfg(not(target_os = "macos"))]
             {
                 tray_icon_builder = tray_icon_builder.with_icon(tray_window_icon()?);
@@ -539,7 +539,7 @@ pub fn run_tray_shell(config_path: PathBuf, ready_file: Option<PathBuf>) -> Resu
 
         let title = macos_nsstring("");
         let fallback_title = macos_nsstring("LDO");
-        let tooltip = macos_nsstring("Linux.do Accelerator");
+        let tooltip = macos_nsstring("Jireh Accelerator");
         let _: () = msg_send![button, setTitle: title];
         let _: () = msg_send![button, setToolTip: tooltip];
         let _: () = msg_send![button, setAccessibilityLabel: tooltip];
@@ -677,7 +677,7 @@ fn macos_tray_shell_pid_alive(pid: u32) -> bool {
         .and_then(|output| String::from_utf8(output.stdout).ok())
         .map(|command| {
             command.contains("tray-shell")
-                && (command.contains("linuxdo-accelerator")
+                && (command.contains("jireh-accelerator")
                     || command.contains("LinuxdoAcceleratorTray"))
         })
         .unwrap_or(false)
@@ -685,7 +685,7 @@ fn macos_tray_shell_pid_alive(pid: u32) -> bool {
 
 #[cfg(target_os = "macos")]
 fn macos_tray_shell_lock_path() -> PathBuf {
-    std::env::temp_dir().join("linuxdo-accelerator-macos-tray-shell.pid")
+    std::env::temp_dir().join("jireh-accelerator-macos-tray-shell.pid")
 }
 
 #[cfg(target_os = "macos")]
@@ -796,7 +796,7 @@ unsafe fn macos_create_status_item(
 unsafe fn macos_configure_status_item_visibility(status_item: *mut objc::runtime::Object) {
     use objc::{msg_send, sel, sel_impl};
 
-    let autosave_name = unsafe { macos_nsstring("io.linuxdo.accelerator.tray") };
+    let autosave_name = unsafe { macos_nsstring("io.jireh.accelerator.tray") };
     let supports_autosave: bool =
         unsafe { msg_send![status_item, respondsToSelector: sel!(setAutosaveName:)] };
     if supports_autosave {
@@ -828,28 +828,6 @@ unsafe fn macos_configure_status_item_visibility(status_item: *mut objc::runtime
         unsafe { msg_send![status_item, respondsToSelector: sel!(setVisible:)] };
     if supports_visible {
         let _: () = unsafe { msg_send![status_item, setVisible: true] };
-    }
-}
-
-#[cfg(target_os = "macos")]
-unsafe fn macos_set_status_item_visible(status_item: *mut objc::runtime::Object, visible: bool) {
-    use objc::{msg_send, sel, sel_impl};
-
-    if status_item.is_null() {
-        return;
-    }
-
-    let supports_visible: bool =
-        unsafe { msg_send![status_item, respondsToSelector: sel!(setVisible:)] };
-    if supports_visible {
-        let _: () = unsafe { msg_send![status_item, setVisible: visible] };
-        return;
-    }
-
-    let button: *mut objc::runtime::Object = unsafe { msg_send![status_item, button] };
-    if !button.is_null() {
-        let _: () = unsafe { msg_send![button, setHidden: !visible] };
-        let _: () = unsafe { msg_send![button, setNeedsDisplay: true] };
     }
 }
 
@@ -896,10 +874,10 @@ fn build_macos_tray_state(ctx: &egui::Context) -> (Option<TrayState>, Receiver<T
 
     let tray_icon = match tray_window_icon() {
         Ok(icon) => TrayIconBuilder::new()
-            .with_id("linuxdo-accelerator-macos-tray")
+            .with_id("jireh-accelerator-macos-tray")
             .with_menu(Box::new(menu))
             .with_menu_on_left_click(false)
-            .with_tooltip("Linux.do Accelerator")
+            .with_tooltip("Jireh Accelerator")
             .with_icon(icon)
             .with_icon_as_template(false)
             .build()
@@ -1176,7 +1154,7 @@ impl AcceleratorApp {
         #[cfg(target_os = "windows")]
         schedule_windows_shortcut_icon_refresh(&config_path);
         let logo = cc.egui_ctx.load_texture(
-            "linuxdo-logo",
+            "jireh-logo",
             branding::logo_image(96),
             egui::TextureOptions::LINEAR,
         );
@@ -1967,7 +1945,7 @@ impl AcceleratorApp {
                         .color(egui::Color32::from_rgb(244, 245, 247)),
                 );
                 ui.label(
-                    RichText::new("Linux.do Accelerator")
+                    RichText::new("Jireh Accelerator")
                         .font(FontId::proportional(10.5))
                         .color(egui::Color32::from_rgb(140, 150, 160)),
                 );
@@ -2022,7 +2000,7 @@ impl AcceleratorApp {
                             ui.add(egui::Image::new((self.logo.id(), egui::vec2(20.0, 20.0))));
                             ui.add_space(8.0);
                             ui.label(
-                                RichText::new("linux.do专属加速器")
+                                RichText::new("Jireh 专属加速器")
                                     .font(FontId::proportional(11.2))
                                     .strong()
                                     .color(egui::Color32::from_rgb(236, 240, 243)),
@@ -2130,10 +2108,13 @@ impl AcceleratorApp {
                         .auto_shrink([false, false])
                         .show(ui, |ui| {
                             for line in self.recent_logs_or_placeholder() {
-                                ui.label(
-                                    RichText::new(line)
-                                        .font(FontId::monospace(10.5))
-                                        .color(egui::Color32::from_rgb(190, 198, 206)),
+                                ui.add(
+                                    egui::Label::new(
+                                        RichText::new(line)
+                                            .font(FontId::proportional(11.5))
+                                            .color(egui::Color32::from_rgb(190, 198, 206)),
+                                    )
+                                    .wrap(),
                                 );
                             }
                         });
@@ -2212,7 +2193,7 @@ impl AcceleratorApp {
             );
             ui.add_space(6.0);
             ui.label(
-                RichText::new("全部配置都在 linuxdo-accelerator.toml，改这一份即可。")
+                RichText::new("全部配置都在 jireh-accelerator.toml，改这一份即可。")
                     .font(FontId::proportional(11.4))
                     .color(egui::Color32::from_rgb(214, 219, 223)),
             );
@@ -2296,10 +2277,10 @@ impl AcceleratorApp {
             );
             ui.add_space(6.0);
             detail_value_row(ui, "版本", &format!("v{APP_VERSION}"));
-            detail_value_row(ui, "名称", "Linux.do Accelerator");
+            detail_value_row(ui, "名称", "Jireh Accelerator");
             ui.add_space(8.0);
             about_bullet(ui, "支持证书、hosts、本地 80/443 与 DoH。");
-            about_bullet(ui, "配置统一写在 linuxdo-accelerator.toml。");
+            about_bullet(ui, "配置统一写在 jireh-accelerator.toml。");
             about_bullet(ui, "启动时会申请管理员权限并拉起守护进程。");
         });
     }
@@ -2771,6 +2752,7 @@ impl GuiAction {
         "确认"
     }
 
+    #[cfg(windows)]
     fn error_context(self) -> &'static str {
         match self {
             Self::Start => "elevation or command execution failed",
@@ -2786,7 +2768,6 @@ fn execute_action(config_path: &Path, action: GuiAction) -> Result<String> {
             .with_context(|| "macOS certificate preparation failed")?;
     }
 
-    let before_status = service::status(Some(config_path.to_path_buf())).unwrap_or_default();
     if let Ok(paths) = service::resolve_paths(Some(config_path.to_path_buf())) {
         let _ = append_runtime_log(
             &paths,
@@ -2870,6 +2851,7 @@ fn execute_action(config_path: &Path, action: GuiAction) -> Result<String> {
     // Non-Unix (Windows): use the existing elevation path.
     #[cfg(not(unix))]
     {
+        let before_status = service::status(Some(config_path.to_path_buf())).unwrap_or_default();
         let cli_binary = locate_action_binary()?;
         let args = vec![
             "--config".to_string(),
@@ -2942,6 +2924,7 @@ fn execute_action(config_path: &Path, action: GuiAction) -> Result<String> {
     }
 }
 
+#[cfg(windows)]
 fn service_state_changed(before: &ServiceState, after: &ServiceState) -> bool {
     before.running != after.running
         || before.pid != after.pid
@@ -3090,7 +3073,7 @@ fn spawn_ui_process(config_path: &Path) -> Result<()> {
     #[cfg(target_os = "linux")]
     if use_native_wayland_frame() {
         let desktop_launcher = PathBuf::from("/usr/bin/gtk-launch");
-        let args = vec!["linuxdo-accelerator".to_string()];
+        let args = vec!["jireh-accelerator".to_string()];
         log_linux_tray_event(&format!(
             "spawn ui via launcher exe={} config={}",
             desktop_launcher.display(),
@@ -3188,6 +3171,7 @@ fn locate_action_binary() -> Result<PathBuf> {
     locate_current_or_sibling_binary(action_binary_name())
 }
 
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn locate_gui_binary() -> Result<PathBuf> {
     locate_current_or_sibling_binary(gui_binary_name())
 }
@@ -3236,12 +3220,13 @@ fn locate_current_or_sibling_binary(binary_name: &str) -> Result<PathBuf> {
 
 fn action_binary_name() -> &'static str {
     if cfg!(target_os = "windows") {
-        "linuxdo-accelerator.exe"
+        "jireh-accelerator.exe"
     } else {
-        "linuxdo-accelerator"
+        "jireh-accelerator"
     }
 }
 
+#[cfg(any(target_os = "linux", target_os = "windows"))]
 fn gui_binary_name() -> &'static str {
     action_binary_name()
 }
@@ -3262,10 +3247,10 @@ fn install_fonts(ctx: &egui::Context) {
     let (font_name, font_data) = load_ui_font();
     fonts.font_data.insert(font_name.clone(), font_data.into());
     if let Some(family) = fonts.families.get_mut(&FontFamily::Proportional) {
-        family.push(font_name.clone());
+        family.insert(0, font_name.clone());
     }
     if let Some(family) = fonts.families.get_mut(&FontFamily::Monospace) {
-        family.push(font_name);
+        family.insert(0, font_name);
     }
     ctx.set_fonts(fonts);
 }
@@ -3381,6 +3366,10 @@ fn install_theme(ctx: &egui::Context) {
     style.text_styles.insert(
         egui::TextStyle::Small,
         FontId::new(11.5, FontFamily::Proportional),
+    );
+    style.text_styles.insert(
+        egui::TextStyle::Monospace,
+        FontId::new(11.5, FontFamily::Monospace),
     );
     ctx.set_style(style);
 }
@@ -3686,15 +3675,19 @@ fn detail_value_row(ui: &mut egui::Ui, label: &str, value: &str) {
         .show(ui, |ui| {
             ui.label(
                 RichText::new(label)
-                    .font(FontId::proportional(11.0))
+                    .font(FontId::proportional(11.5))
                     .strong()
                     .color(egui::Color32::from_rgb(243, 179, 74)),
             );
-            ui.add_space(3.0);
-            ui.label(
-                RichText::new(value)
-                    .font(FontId::monospace(11.2))
-                    .color(egui::Color32::from_rgb(232, 236, 239)),
+            ui.add_space(4.0);
+            ui.add(
+                egui::Label::new(
+                    RichText::new(value)
+                        .font(FontId::proportional(12.0))
+                        .color(egui::Color32::from_rgb(232, 236, 239)),
+                )
+                .wrap()
+                .selectable(true),
             );
         });
 }
@@ -3734,10 +3727,10 @@ fn build_windows_tray_state(
 
     let tray_icon = match tray_window_icon() {
         Ok(icon) => TrayIconBuilder::new()
-            .with_id("linuxdo-accelerator-tray")
+            .with_id("jireh-accelerator-tray")
             .with_menu(Box::new(menu))
             .with_menu_on_left_click(false)
-            .with_tooltip("Linux.do Accelerator")
+            .with_tooltip("Jireh Accelerator")
             .with_icon(icon)
             .build()
             .ok(),

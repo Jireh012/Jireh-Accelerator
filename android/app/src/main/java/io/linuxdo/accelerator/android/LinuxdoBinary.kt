@@ -1,4 +1,4 @@
-package io.linuxdo.accelerator.android
+package io.jireh.accelerator.android
 
 import android.content.Context
 import org.tomlj.Toml
@@ -89,11 +89,11 @@ data class CommandResult(
 }
 
 object LinuxdoBinary {
-    private const val BINARY_ASSET = "bin/linuxdo-accelerator"
-    private const val CONFIG_ASSET = "defaults/linuxdo-accelerator.toml"
-    private const val BINARY_NAME = "linuxdo-accelerator"
-    private const val CONFIG_NAME = "linuxdo-accelerator.toml"
-    private const val ROOT_BINARY_DIR = "/data/local/tmp/linuxdo-accelerator"
+    private const val BINARY_ASSET = "bin/jireh-accelerator"
+    private const val CONFIG_ASSET = "defaults/jireh-accelerator.toml"
+    private const val BINARY_NAME = "jireh-accelerator"
+    private const val CONFIG_NAME = "jireh-accelerator.toml"
+    private const val ROOT_BINARY_DIR = "/data/local/tmp/jireh-accelerator"
     private const val ROOT_BINARY_PATH = "$ROOT_BINARY_DIR/$BINARY_NAME"
     private const val SHELL_PATH = "/system/bin/sh"
     private val SU_CANDIDATES = listOf("/system/bin/su", "/system/xbin/su", "su")

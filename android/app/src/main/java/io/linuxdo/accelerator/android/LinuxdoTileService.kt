@@ -1,4 +1,4 @@
-package io.linuxdo.accelerator.android
+package io.jireh.accelerator.android
 
 import android.graphics.drawable.Icon
 import android.content.Intent

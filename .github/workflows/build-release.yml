@@ -101,7 +101,7 @@ jobs:
           echo "${PWD}/.dmgbuild-venv/bin" >> "${GITHUB_PATH}"
 
       - name: Build binary
-        run: cargo build --release --locked --bin linuxdo-accelerator
+        run: cargo build --release --locked --bin jireh-accelerator
 
       - name: Package app
         run: ${{ matrix.package_cmd }}
@@ -113,10 +113,10 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linuxdo-accelerator-${{ steps.sync_version.outputs.package_version }}-${{ matrix.artifact_name }}
+          name: jireh-accelerator-${{ steps.sync_version.outputs.package_version }}-${{ matrix.artifact_name }}
           path: |
             dist/**
-            target/release/linuxdo-accelerator*
+            target/release/jireh-accelerator*
 
   build-android:
     strategy:
@@ -195,7 +195,7 @@ jobs:
           ANDROID_ABI: ${{ matrix.abi }}
           RUST_TARGET: ${{ matrix.rust_target }}
           ANDROID_BUILD_TYPE: release
-          APK_OUTPUT_NAME: linuxdo-accelerator-${{ steps.sync_version.outputs.package_version }}-android-${{ matrix.abi }}.apk
+          APK_OUTPUT_NAME: jireh-accelerator-${{ steps.sync_version.outputs.package_version }}-android-${{ matrix.abi }}.apk
         run: |
           export ANDROID_NDK_HOME="${ANDROID_SDK_ROOT}/ndk/27.2.12479018"
           ./scripts/build-android-apk.sh
@@ -203,7 +203,7 @@ jobs:
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linuxdo-accelerator-${{ steps.sync_version.outputs.package_version }}-${{ matrix.artifact_name }}
+          name: jireh-accelerator-${{ steps.sync_version.outputs.package_version }}-${{ matrix.artifact_name }}
           path: |
             android/dist/*.apk
 
@@ -219,7 +219,7 @@ jobs:
       - name: Download packaged artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: linuxdo-accelerator-*
+          pattern: jireh-accelerator-*
           path: release-artifacts
           merge-multiple: false
 

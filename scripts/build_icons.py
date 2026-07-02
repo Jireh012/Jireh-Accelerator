@@ -2,11 +2,12 @@
 
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFilter
-
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent.parent
 ICON_DIR = ROOT / "assets" / "icons"
+ANDROID_DRAWABLE = ROOT / "android" / "app" / "src" / "main" / "res" / "drawable"
+SOURCE_PATH = ICON_DIR / "icon-source.png"
 ICO_PATH = ICON_DIR / "linuxdo.ico"
 PNG_SIZES = [32, 48, 64, 72, 80, 96, 112, 120, 128, 144, 160, 192, 224, 256, 512]
 ICO_SIZES = [
@@ -29,62 +30,41 @@ ICO_SIZES = [
     (224, 224),
     (256, 256),
 ]
-MASTER_SIZE = 4096
+CORNER_RADIUS_RATIO = 0.22
 
 
-def build_master() -> Image.Image:
-    image = Image.new("RGBA", (MASTER_SIZE, MASTER_SIZE), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
-
-    cx = cy = MASTER_SIZE / 2
-    outer_r = MASTER_SIZE * 0.476
-    inner_r = MASTER_SIZE * 0.438
-
-    outer_box = (
-        int(cx - outer_r),
-        int(cy - outer_r),
-        int(cx + outer_r),
-        int(cy + outer_r),
-    )
-    inner_box = (
-        int(cx - inner_r),
-        int(cy - inner_r),
-        int(cx + inner_r),
-        int(cy + inner_r),
-    )
-
-    draw.ellipse(outer_box, fill=(255, 255, 255, 255))
-
-    inner = Image.new("RGBA", (MASTER_SIZE, MASTER_SIZE), (0, 0, 0, 0))
-    inner_draw = ImageDraw.Draw(inner)
-    inner_draw.rectangle((0, 0, MASTER_SIZE, int(MASTER_SIZE * 0.305)), fill=(30, 30, 34, 255))
-    inner_draw.rectangle(
-        (0, int(MASTER_SIZE * 0.305), MASTER_SIZE, int(MASTER_SIZE * 0.695)),
-        fill=(245, 245, 245, 255),
-    )
-    inner_draw.rectangle((0, int(MASTER_SIZE * 0.695), MASTER_SIZE, MASTER_SIZE), fill=(247, 173, 26, 255))
-
-    mask = Image.new("L", (MASTER_SIZE, MASTER_SIZE), 0)
-    ImageDraw.Draw(mask).ellipse(inner_box, fill=255)
-    image.alpha_composite(Image.composite(inner, Image.new("RGBA", inner.size, (0, 0, 0, 0)), mask))
-    return image
+def load_master() -> Image.Image:
+    if not SOURCE_PATH.exists():
+        raise SystemExit(f"missing icon source: {SOURCE_PATH}")
+    return Image.open(SOURCE_PATH).convert("RGBA")
 
 
-def render_icon(base: Image.Image, size: int) -> Image.Image:
-    icon = base.resize((size, size), Image.Resampling.LANCZOS)
-    radius = 0.8 if size <= 24 else 1.0 if size <= 48 else 1.2
-    percent = 165 if size <= 24 else 150 if size <= 48 else 120
-    icon = icon.filter(ImageFilter.UnsharpMask(radius=radius, percent=percent, threshold=2))
-    return icon
+def round_corners(image: Image.Image) -> Image.Image:
+    size = image.size[0]
+    radius = max(1, round(size * CORNER_RADIUS_RATIO))
+    mask = Image.new("L", image.size, 0)
+    draw = ImageDraw.Draw(mask)
+    draw.rounded_rectangle((0, 0, size - 1, size - 1), radius=radius, fill=255)
+    rounded = Image.new("RGBA", image.size, (0, 0, 0, 0))
+    rounded.paste(image, mask=mask)
+    return rounded
+
+
+def render_icon(image: Image.Image, size: int) -> Image.Image:
+    return round_corners(image.resize((size, size), Image.Resampling.LANCZOS))
 
 
 def main() -> None:
-    master = build_master()
+    master = load_master()
+    ICON_DIR.mkdir(parents=True, exist_ok=True)
+    ANDROID_DRAWABLE.mkdir(parents=True, exist_ok=True)
 
     for size in PNG_SIZES:
         render_icon(master, size).save(ICON_DIR / f"{size}x{size}.png")
 
-    master.save(ICO_PATH, format="ICO", sizes=ICO_SIZES)
+    rounded_master = round_corners(master)
+    rounded_master.save(ICO_PATH, format="ICO", sizes=ICO_SIZES)
+    render_icon(master, 512).save(ANDROID_DRAWABLE / "ic_linuxdo_logo.png")
 
 
 if __name__ == "__main__":

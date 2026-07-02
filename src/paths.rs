@@ -25,10 +25,10 @@ pub struct AppPaths {
 impl AppPaths {
     pub fn resolve(config_override: Option<PathBuf>) -> Result<Self> {
         let (default_config_dir, default_data_dir) = default_app_dirs()?;
-        let default_config_path = default_config_dir.join("linuxdo-accelerator.toml");
+        let default_config_path = default_config_dir.join("jireh-accelerator.toml");
         let has_config_override = config_override.is_some();
         let config_path =
-            config_override.unwrap_or_else(|| default_config_dir.join("linuxdo-accelerator.toml"));
+            config_override.unwrap_or_else(|| default_config_dir.join("jireh-accelerator.toml"));
         let config_dir = config_path
             .parent()
             .map(Path::to_path_buf)
@@ -55,7 +55,7 @@ impl AppPaths {
         let runtime_dir = data_dir.join("runtime");
         let cert_dir = data_dir.join("certs");
         let state_path = runtime_dir.join("service-state.json");
-        let pid_path = runtime_dir.join("linuxdo-accelerator.pid");
+        let pid_path = runtime_dir.join("jireh-accelerator.pid");
         let ui_lease_path = runtime_dir.join("ui-lease.json");
         let ui_window_path = runtime_dir.join("ui-window.json");
         let runtime_log_path = runtime_dir.join("operations.log");
@@ -93,31 +93,52 @@ impl AppPaths {
     }
 }
 
+fn prefer_existing_dir(new_dir: PathBuf, legacy_dir: PathBuf) -> PathBuf {
+    if legacy_dir.exists() && !new_dir.exists() {
+        legacy_dir
+    } else {
+        new_dir
+    }
+}
+
 fn default_app_dirs() -> Result<(PathBuf, PathBuf)> {
     #[cfg(target_os = "android")]
     {
-        let root = PathBuf::from("/data/local/tmp/linuxdo-accelerator");
+        let root = prefer_existing_dir(
+            PathBuf::from("/data/local/tmp/jireh-accelerator"),
+            PathBuf::from("/data/local/tmp/linuxdo-accelerator"),
+        );
         return Ok((root.join("config"), root.join("data")));
     }
 
     #[cfg(target_os = "linux")]
     {
         if let Some(home) = effective_linux_home_dir() {
-            return Ok((
+            let config_dir = prefer_existing_dir(
+                home.join(".config").join("jireh-accelerator"),
                 home.join(".config").join("linuxdo-accelerator"),
-                home.join(".local")
-                    .join("share")
-                    .join("linuxdo-accelerator"),
-            ));
+            );
+            let data_dir = prefer_existing_dir(
+                home.join(".local").join("share").join("jireh-accelerator"),
+                home.join(".local").join("share").join("linuxdo-accelerator"),
+            );
+            return Ok((config_dir, data_dir));
         }
     }
 
-    let dirs = ProjectDirs::from("io", "linuxdo", "linuxdo-accelerator")
+    let new_dirs = ProjectDirs::from("io", "jireh", "jireh-accelerator")
         .ok_or_else(|| anyhow!("failed to resolve platform application directories"))?;
-    Ok((
-        dirs.config_dir().to_path_buf(),
-        dirs.data_local_dir().to_path_buf(),
-    ))
+    let legacy_dirs = ProjectDirs::from("io", "linuxdo", "linuxdo-accelerator")
+        .ok_or_else(|| anyhow!("failed to resolve legacy application directories"))?;
+    let config_dir = prefer_existing_dir(
+        new_dirs.config_dir().to_path_buf(),
+        legacy_dirs.config_dir().to_path_buf(),
+    );
+    let data_dir = prefer_existing_dir(
+        new_dirs.data_local_dir().to_path_buf(),
+        legacy_dirs.data_local_dir().to_path_buf(),
+    );
+    Ok((config_dir, data_dir))
 }
 
 #[cfg(target_os = "linux")]

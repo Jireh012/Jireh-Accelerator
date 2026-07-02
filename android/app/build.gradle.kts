@@ -11,7 +11,7 @@ val repoRoot = rootProject.projectDir.parentFile
 val generatedAssetsDir = layout.buildDirectory.dir("generated/linuxdoAssets")
 val rustBinaryProvider = providers
     .environmentVariable("LINUXDO_ANDROID_RUST_BIN")
-    .orElse(repoRoot.resolve("target/aarch64-linux-android/release/linuxdo-accelerator").absolutePath)
+    .orElse(repoRoot.resolve("target/aarch64-linux-android/release/jireh-accelerator").absolutePath)
 val gitHash: String = providers.environmentVariable("LINUXDO_GIT_HASH").getOrElse(
     runCatching {
         val output = ByteArrayOutputStream()
@@ -25,11 +25,11 @@ val gitHash: String = providers.environmentVariable("LINUXDO_GIT_HASH").getOrEls
 )
 
 android {
-    namespace = "io.linuxdo.accelerator.android"
+    namespace = "io.jireh.accelerator.android"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "io.linuxdo.accelerator.android"
+        applicationId = "io.jireh.accelerator.android"
         minSdk = 28
         targetSdk = 35
         versionCode = 3
@@ -66,13 +66,13 @@ val generateLinuxdoAssets = tasks.register<Sync>("generateLinuxdoAssets") {
     into(generatedAssetsDir)
 
     from(repoRoot.resolve("assets/defaults")) {
-        include("linuxdo-accelerator.toml")
+        include("jireh-accelerator.toml")
         into("defaults")
     }
 
     from(rustBinaryProvider) {
         into("bin")
-        rename { "linuxdo-accelerator" }
+        rename { "jireh-accelerator" }
     }
 
     doFirst {

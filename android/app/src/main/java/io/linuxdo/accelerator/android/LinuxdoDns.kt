@@ -1,4 +1,4 @@
-package io.linuxdo.accelerator.android
+package io.jireh.accelerator.android
 
 import okhttp3.Dns
 import okhttp3.OkHttpClient

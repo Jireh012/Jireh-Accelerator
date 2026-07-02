@@ -331,7 +331,7 @@ fn temp_hosts_path(path: &Path) -> PathBuf {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("hosts");
-    path.with_file_name(format!("{file_name}.linuxdo-accelerator.tmp"))
+    path.with_file_name(format!("{file_name}.jireh-accelerator.tmp"))
 }
 
 fn temp_backup_path(path: &Path) -> PathBuf {
@@ -339,7 +339,7 @@ fn temp_backup_path(path: &Path) -> PathBuf {
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("backup");
-    path.with_file_name(format!("{file_name}.linuxdo-accelerator.tmp"))
+    path.with_file_name(format!("{file_name}.jireh-accelerator.tmp"))
 }
 
 fn unix_timestamp_ms() -> Result<u64> {
@@ -634,10 +634,10 @@ mod tests {
         std::fs::write(&paths.hosts_backup_path, "backup").unwrap();
         let backup_temp_path = paths
             .hosts_backup_path
-            .with_file_name("hosts.backup.linuxdo-accelerator.tmp");
+            .with_file_name("hosts.backup.jireh-accelerator.tmp");
         let meta_temp_path = paths
             .hosts_backup_meta_path
-            .with_file_name("hosts.backup.json.linuxdo-accelerator.tmp");
+            .with_file_name("hosts.backup.json.jireh-accelerator.tmp");
         std::fs::write(&backup_temp_path, "temp").unwrap();
         std::fs::write(&meta_temp_path, "temp").unwrap();
 
@@ -663,7 +663,7 @@ mod tests {
     fn create_test_dir(name: &str) -> PathBuf {
         let mut path = std::env::temp_dir();
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        path.push(format!("linuxdo-accelerator-{name}-{id}"));
+        path.push(format!("jireh-accelerator-{name}-{id}"));
         if path.exists() {
             let _ = std::fs::remove_dir_all(&path);
         }
@@ -705,13 +705,13 @@ mod tests {
         let cert_dir = data_dir.join("certs");
 
         AppPaths {
-            config_path: config_dir.join("linuxdo-accelerator.toml"),
+            config_path: config_dir.join("jireh-accelerator.toml"),
             config_dir,
             data_dir,
             runtime_dir: runtime_dir.clone(),
             cert_dir,
             state_path: runtime_dir.join("service-state.json"),
-            pid_path: runtime_dir.join("linuxdo-accelerator.pid"),
+            pid_path: runtime_dir.join("jireh-accelerator.pid"),
             ui_lease_path: runtime_dir.join("ui-lease.json"),
             ui_window_path: runtime_dir.join("ui-window.json"),
             runtime_log_path: runtime_dir.join("operations.log"),

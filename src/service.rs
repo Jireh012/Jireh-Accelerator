@@ -442,7 +442,7 @@ fn handle_helper_stop(
 #[cfg(unix)]
 fn handle_helper_status(
     config_path: &std::path::Path,
-    proxy_state: &Arc<Mutex<Option<ProxyHandle>>>,
+    _proxy_state: &Arc<Mutex<Option<ProxyHandle>>>,
 ) -> HelperResponse {
 
     match status(Some(config_path.to_path_buf())) {
@@ -1063,8 +1063,8 @@ fn current_cli_binary() -> Result<PathBuf> {
 
 fn cli_binary_name() -> &'static str {
     if cfg!(target_os = "windows") {
-        "linuxdo-accelerator.exe"
+        "jireh-accelerator.exe"
     } else {
-        "linuxdo-accelerator"
+        "jireh-accelerator"
     }
 }

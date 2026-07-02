@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, anyhow};
 use serde::{Deserialize, Serialize};
 
-const DEFAULT_APP_CONFIG: &str = include_str!("../assets/defaults/linuxdo-accelerator.toml");
+const DEFAULT_APP_CONFIG: &str = include_str!("../assets/defaults/jireh-accelerator.toml");
 const CURRENT_CONFIG_VERSION: &str = env!("LINUXDO_GIT_HASH");
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,7 +121,7 @@ fn default_server_common_name() -> String {
 
 fn default_app_config() -> AppConfig {
     toml::from_str(DEFAULT_APP_CONFIG)
-        .expect("assets/defaults/linuxdo-accelerator.toml must be valid TOML")
+        .expect("assets/defaults/jireh-accelerator.toml must be valid TOML")
 }
 
 fn legacy_network_profile_path(config_path: &Path) -> PathBuf {
@@ -135,7 +135,7 @@ fn sibling_path(config_path: &Path, suffix: &str) -> PathBuf {
     let mut name = config_path
         .file_name()
         .map(ToOwned::to_owned)
-        .unwrap_or_else(|| OsString::from("linuxdo-accelerator.toml"));
+        .unwrap_or_else(|| OsString::from("jireh-accelerator.toml"));
     name.push(suffix);
     config_path
         .parent()
@@ -149,6 +149,78 @@ fn version_marker_path(config_path: &Path) -> PathBuf {
 
 fn backup_config_path(config_path: &Path) -> PathBuf {
     sibling_path(config_path, ".bak")
+}
+
+fn legacy_config_path(config_path: &Path) -> PathBuf {
+    config_path
+        .parent()
+        .map(|parent| parent.join("linuxdo-accelerator.toml"))
+        .unwrap_or_else(|| PathBuf::from("linuxdo-accelerator.toml"))
+}
+
+fn migrate_legacy_config_name(path: &Path) -> Result<bool> {
+    if path.exists() {
+        return Ok(false);
+    }
+
+    let legacy_path = legacy_config_path(path);
+    if !legacy_path.exists() {
+        return Ok(false);
+    }
+
+    match fs::rename(&legacy_path, path) {
+        Ok(()) => {}
+        Err(_) => {
+            fs::copy(&legacy_path, path).with_context(|| {
+                format!(
+                    "failed to copy legacy config {} to {}",
+                    legacy_path.display(),
+                    path.display()
+                )
+            })?;
+            fs::remove_file(&legacy_path).with_context(|| {
+                format!("failed to remove legacy config {}", legacy_path.display())
+            })?;
+        }
+    }
+
+    let legacy_marker = version_marker_path(&legacy_path);
+    let marker = version_marker_path(path);
+    if legacy_marker.exists() {
+        if marker.exists() {
+            let _ = fs::remove_file(&legacy_marker);
+        } else {
+            let _ = fs::rename(&legacy_marker, &marker).or_else(|_| {
+                fs::copy(&legacy_marker, &marker).and_then(|_| fs::remove_file(&legacy_marker))
+            });
+        }
+    }
+
+    Ok(true)
+}
+
+fn write_default_config(path: &Path) -> Result<()> {
+    let marker_path = version_marker_path(path);
+    fs::write(path, DEFAULT_APP_CONFIG)
+        .with_context(|| format!("failed to write config {}", path.display()))?;
+    write_version_marker(&marker_path)?;
+    cleanup_legacy_network_profile(path)
+}
+
+fn reset_config_with_backup(path: &Path) -> Result<()> {
+    let backup_path = backup_config_path(path);
+    let marker_path = version_marker_path(path);
+    fs::copy(path, &backup_path).with_context(|| {
+        format!(
+            "failed to back up {} to {}",
+            path.display(),
+            backup_path.display()
+        )
+    })?;
+    fs::write(path, DEFAULT_APP_CONFIG)
+        .with_context(|| format!("failed to write config {}", path.display()))?;
+    write_version_marker(&marker_path)?;
+    cleanup_legacy_network_profile(path)
 }
 
 fn read_version_marker(marker_path: &Path) -> Option<String> {
@@ -173,23 +245,19 @@ impl AppConfig {
                 .with_context(|| format!("failed to create {}", parent.display()))?;
         }
 
+        let _ = migrate_legacy_config_name(path)?;
+
         let marker_path = version_marker_path(path);
         if path.exists() && marker_matches_current_version(&marker_path) {
             return Ok(false);
         }
 
-        let backup_path = backup_config_path(path);
-        fs::copy(path, &backup_path).with_context(|| {
-            format!(
-                "failed to back up {} to {}",
-                path.display(),
-                backup_path.display()
-            )
-        })?;
-        fs::write(path, DEFAULT_APP_CONFIG)
-            .with_context(|| format!("failed to write config {}", path.display()))?;
-        write_version_marker(&marker_path)?;
-        cleanup_legacy_network_profile(path)?;
+        if path.exists() {
+            reset_config_with_backup(path)?;
+            return Ok(true);
+        }
+
+        write_default_config(path)?;
         Ok(true)
     }
 
@@ -201,27 +269,15 @@ impl AppConfig {
 
         let marker_path = version_marker_path(path);
 
+        let _ = migrate_legacy_config_name(path)?;
+
         if path.exists() && !marker_matches_current_version(&marker_path) {
-            let backup_path = backup_config_path(path);
-            fs::copy(path, &backup_path).with_context(|| {
-                format!(
-                    "failed to back up {} to {}",
-                    path.display(),
-                    backup_path.display()
-                )
-            })?;
-            fs::write(path, DEFAULT_APP_CONFIG)
-                .with_context(|| format!("failed to write config {}", path.display()))?;
-            write_version_marker(&marker_path)?;
-            cleanup_legacy_network_profile(path)?;
+            reset_config_with_backup(path)?;
             return Ok(default_app_config());
         }
 
         if !path.exists() {
-            fs::write(path, DEFAULT_APP_CONFIG)
-                .with_context(|| format!("failed to write config {}", path.display()))?;
-            write_version_marker(&marker_path)?;
-            cleanup_legacy_network_profile(path)?;
+            write_default_config(path)?;
             return Ok(default_app_config());
         }
 
@@ -386,7 +442,7 @@ mod tests {
     #[test]
     fn load_or_create_preserves_manual_loopback_override() {
         let root = create_test_dir("preserve-manual-loopback");
-        let config_path = root.join("linuxdo-accelerator.toml");
+        let config_path = root.join("jireh-accelerator.toml");
         let customized = DEFAULT_APP_CONFIG.replace("127.211.73.84", "127.0.0.1");
         std::fs::write(&config_path, customized).unwrap();
         write_current_version_marker(&config_path);
@@ -403,7 +459,7 @@ mod tests {
     #[test]
     fn load_or_create_does_not_restore_removed_default_entries() {
         let root = create_test_dir("preserve-custom-lists");
-        let config_path = root.join("linuxdo-accelerator.toml");
+        let config_path = root.join("jireh-accelerator.toml");
         let customized = r#"
 listen_host = "127.0.0.1"
 hosts_ip = "127.0.0.1"
@@ -417,7 +473,7 @@ dns_hosts = {}
 proxy_domains = ["linux.do"]
 hosts_domains = ["linux.do"]
 certificate_domains = ["linux.do"]
-ca_common_name = "Linux.do Accelerator Root CA"
+ca_common_name = "Jireh Accelerator Root CA"
 server_common_name = "linux.do"
 "#;
         std::fs::write(&config_path, customized).unwrap();
@@ -439,7 +495,7 @@ server_common_name = "linux.do"
     #[test]
     fn load_or_create_uses_defaults_for_missing_fields_without_rewriting() {
         let root = create_test_dir("missing-fields");
-        let config_path = root.join("linuxdo-accelerator.toml");
+        let config_path = root.join("jireh-accelerator.toml");
         let customized = r#"
 listen_host = "127.0.0.1"
 hosts_ip = "127.0.0.1"
@@ -448,7 +504,7 @@ doh_endpoints = ["https://1.1.1.1/dns-query"]
 proxy_domains = ["linux.do"]
 hosts_domains = ["linux.do"]
 certificate_domains = ["linux.do"]
-ca_common_name = "Linux.do Accelerator Root CA"
+ca_common_name = "Jireh Accelerator Root CA"
 server_common_name = "linux.do"
 "#;
         std::fs::write(&config_path, customized).unwrap();
@@ -470,7 +526,7 @@ server_common_name = "linux.do"
     #[test]
     fn load_or_create_resets_to_defaults_on_version_mismatch_and_keeps_backup() {
         let root = create_test_dir("upgrade-overwrite");
-        let config_path = root.join("linuxdo-accelerator.toml");
+        let config_path = root.join("jireh-accelerator.toml");
         let legacy = r#"
 listen_host = "127.0.0.1"
 hosts_ip = "127.0.0.1"
@@ -479,7 +535,7 @@ doh_endpoints = ["https://example.test/dns-query"]
 proxy_domains = ["linux.do"]
 hosts_domains = ["linux.do"]
 certificate_domains = ["linux.do"]
-ca_common_name = "Linux.do Accelerator Root CA"
+ca_common_name = "Jireh Accelerator Root CA"
 server_common_name = "linux.do"
 "#;
         std::fs::write(&config_path, legacy).unwrap();
@@ -501,7 +557,7 @@ server_common_name = "linux.do"
     #[test]
     fn load_or_create_resets_to_defaults_when_marker_is_missing() {
         let root = create_test_dir("upgrade-no-marker");
-        let config_path = root.join("linuxdo-accelerator.toml");
+        let config_path = root.join("jireh-accelerator.toml");
         let legacy = "listen_host = \"127.0.0.1\"\n";
         std::fs::write(&config_path, legacy).unwrap();
 
@@ -518,9 +574,47 @@ server_common_name = "linux.do"
     }
 
     #[test]
+    fn load_or_create_migrates_legacy_config_filename() {
+        let root = create_test_dir("legacy-filename");
+        let config_path = root.join("jireh-accelerator.toml");
+        let legacy_path = root.join("linuxdo-accelerator.toml");
+        let customized = DEFAULT_APP_CONFIG.replace("127.211.73.84", "127.0.0.1");
+        std::fs::write(&legacy_path, customized).unwrap();
+        write_current_version_marker(&legacy_path);
+
+        let config = AppConfig::load_or_create(&config_path).unwrap();
+
+        assert!(config_path.exists());
+        assert!(!legacy_path.exists());
+        assert_eq!(config.listen_host, "127.0.0.1");
+        assert_eq!(config.hosts_ip, "127.0.0.1");
+        assert!(!backup_config_path(&config_path).exists());
+
+        cleanup_test_dir(&root);
+    }
+
+    #[test]
+    fn migrate_config_if_needed_creates_default_when_missing() {
+        let root = create_test_dir("missing-config");
+        let config_path = root.join("jireh-accelerator.toml");
+
+        let migrated = AppConfig::migrate_config_if_needed(&config_path).unwrap();
+
+        assert!(migrated);
+        assert!(config_path.exists());
+        assert_eq!(
+            std::fs::read_to_string(&config_path).unwrap(),
+            DEFAULT_APP_CONFIG
+        );
+        assert!(!backup_config_path(&config_path).exists());
+
+        cleanup_test_dir(&root);
+    }
+
+    #[test]
     fn load_or_create_writes_marker_on_fresh_install() {
         let root = create_test_dir("fresh-install");
-        let config_path = root.join("linuxdo-accelerator.toml");
+        let config_path = root.join("jireh-accelerator.toml");
 
         let _ = AppConfig::load_or_create(&config_path).unwrap();
 
@@ -538,7 +632,7 @@ server_common_name = "linux.do"
     fn create_test_dir(name: &str) -> std::path::PathBuf {
         let mut path = std::env::temp_dir();
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        path.push(format!("linuxdo-accelerator-config-{name}-{id}"));
+        path.push(format!("jireh-accelerator-config-{name}-{id}"));
         if path.exists() {
             let _ = std::fs::remove_dir_all(&path);
         }

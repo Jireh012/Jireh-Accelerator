@@ -3,9 +3,9 @@
 use std::env;
 
 use clap::Parser;
-use linuxdo_accelerator::cli::{self, Cli};
+use jireh_accelerator::cli::{self, Cli};
 #[cfg(target_os = "windows")]
-use linuxdo_accelerator::platform::prepare_windows_cli_stdio;
+use jireh_accelerator::platform::prepare_windows_cli_stdio;
 
 fn main() -> anyhow::Result<()> {
     let args: Vec<_> = env::args_os().collect();

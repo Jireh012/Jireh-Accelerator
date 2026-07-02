@@ -20,6 +20,17 @@ proxy_domains = [
     "*.linux.do",
     "idcflare.com",
     "*.idcflare.com",
+    "wdbook.com",
+    "*.wdbook.com",
+    "zzbook.cfd",
+    "*.zzbook.cfd",
+    "dl.edhub.cc",
+    "wedevotebible.org",
+    "*.wedevotebible.org",
+    "zobook.top",
+    "*.zobook.top",
+    "qqchat.top",
+    "*.qqchat.top",
 ]
 
 hosts_domains = [
@@ -63,6 +74,18 @@ hosts_domains = [
     "www.idcflare.com",
     "connect.idcflare.com",
     "lottery.idcflare.com",
+    "wdbook.com",
+    "www.wdbook.com",
+    "blog.wdbook.com",
+    "zzbook.cfd",
+    "e.zzbook.cfd",
+    "dl.edhub.cc",
+    "wedevotebible.org",
+    "www.wedevotebible.org",
+    "zobook.top",
+    "a.zobook.top",
+    "qqchat.top",
+    "www.qqchat.top",
 ]
 
 certificate_domains = [
@@ -73,7 +96,22 @@ certificate_domains = [
     "idcflare.com",
     "www.idcflare.com",
     "*.idcflare.com",
+    "wdbook.com",
+    "www.wdbook.com",
+    "*.wdbook.com",
+    "zzbook.cfd",
+    "e.zzbook.cfd",
+    "*.zzbook.cfd",
+    "dl.edhub.cc",
+    "wedevotebible.org",
+    "*.wedevotebible.org",
+    "zobook.top",
+    "a.zobook.top",
+    "*.zobook.top",
+    "qqchat.top",
+    "www.qqchat.top",
+    "*.qqchat.top",
 ]
 
-ca_common_name = "Linux.do Accelerator Root CA"
+ca_common_name = "Jireh Accelerator Root CA"
 server_common_name = "linux.do"

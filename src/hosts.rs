@@ -10,8 +10,10 @@ use crate::hosts_store::{
 };
 use crate::paths::AppPaths;
 
-const START_MARKER: &str = "# >>> linuxdo-accelerator >>>";
-const END_MARKER: &str = "# <<< linuxdo-accelerator <<<";
+const START_MARKER: &str = "# >>> jireh-accelerator >>>";
+const END_MARKER: &str = "# <<< jireh-accelerator <<<";
+const LEGACY_START_MARKER: &str = "# >>> linuxdo-accelerator >>>";
+const LEGACY_END_MARKER: &str = "# <<< linuxdo-accelerator <<<";
 
 pub fn apply_hosts(config: &AppConfig, paths: &AppPaths) -> Result<()> {
     #[cfg(target_os = "android")]
@@ -282,10 +284,16 @@ fn strip_managed_block(content: &str) -> String {
     let mut index = 0;
 
     while index < lines.len() {
-        if lines[index].trim() == START_MARKER {
+        let trimmed = lines[index].trim();
+        if trimmed == START_MARKER || trimmed == LEGACY_START_MARKER {
+            let end_marker = if trimmed == START_MARKER {
+                END_MARKER
+            } else {
+                LEGACY_END_MARKER
+            };
             if let Some(end_index) = lines[index + 1..]
                 .iter()
-                .position(|line| line.trim() == END_MARKER)
+                .position(|line| line.trim() == end_marker)
                 .map(|offset| index + 1 + offset)
             {
                 index = end_index + 1;
@@ -331,9 +339,9 @@ mod tests {
     fn strip_managed_block_only_removes_owned_lines() {
         let content = [
             "127.0.0.1 localhost",
-            "# >>> linuxdo-accelerator >>>",
+            "# >>> jireh-accelerator >>>",
             "127.211.73.84 linux.do",
-            "# <<< linuxdo-accelerator <<<",
+            "# <<< jireh-accelerator <<<",
             "1.1.1.1 example.com",
         ]
         .join("\n");
@@ -354,9 +362,9 @@ mod tests {
 
         let original = [
             "127.0.0.1 localhost",
-            "# >>> linuxdo-accelerator >>>",
+            "# >>> jireh-accelerator >>>",
             "127.0.0.1 stale.example",
-            "# <<< linuxdo-accelerator <<<",
+            "# <<< jireh-accelerator <<<",
         ]
         .join("\n");
 
@@ -373,7 +381,7 @@ mod tests {
     fn strip_managed_block_keeps_tail_when_end_marker_is_missing() {
         let content = [
             "127.0.0.1 localhost",
-            "# >>> linuxdo-accelerator >>>",
+            "# >>> jireh-accelerator >>>",
             "127.211.73.84 linux.do",
             "1.1.1.1 example.com",
         ]
@@ -387,9 +395,9 @@ mod tests {
     fn backup_baseline_strips_existing_managed_block() {
         let content = [
             "127.0.0.1 localhost",
-            "# >>> linuxdo-accelerator >>>",
+            "# >>> jireh-accelerator >>>",
             "127.211.73.84 linux.do",
-            "# <<< linuxdo-accelerator <<<",
+            "# <<< jireh-accelerator <<<",
             "1.1.1.1 example.com",
         ]
         .join("\n");

@@ -41,9 +41,9 @@ pub fn load_bundle(root: &Path) -> Result<CertificateBundle> {
 
 fn bundle_paths(root: &Path) -> CertificateBundle {
     CertificateBundle {
-        ca_cert_path: root.join("linuxdo-accelerator-root-ca.crt"),
-        server_cert_path: root.join("linuxdo-accelerator-server.crt"),
-        server_key_path: root.join("linuxdo-accelerator-server.key"),
+        ca_cert_path: root.join("jireh-accelerator-root-ca.crt"),
+        server_cert_path: root.join("jireh-accelerator-server.crt"),
+        server_key_path: root.join("jireh-accelerator-server.key"),
     }
 }
 
@@ -54,7 +54,7 @@ fn generate_bundle(config: &AppConfig, root: &Path) -> Result<CertificateBundle>
 
     let bundle = bundle_paths(&cert_dir);
 
-    let domains_hash_path = cert_dir.join("linuxdo-accelerator-domains.sha256");
+    let domains_hash_path = cert_dir.join("jireh-accelerator-domains.sha256");
     let current_hash = domains_hash(&config.certificate_domains);
 
     if bundle_all_exist(&bundle) {

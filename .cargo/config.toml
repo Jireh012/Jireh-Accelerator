@@ -6,3 +6,6 @@ registry = "sparse+https://rsproxy.cn/index/"
 
 [net]
 git-fetch-with-cli = true
+
+[build]
+rustflags = ["--check-cfg=cfg(feature, values(\"cargo-clippy\"))"]

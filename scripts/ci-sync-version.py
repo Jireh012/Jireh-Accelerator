@@ -59,7 +59,7 @@ def main() -> int:
     )
     replace_once(
         repo_root / "Cargo.lock",
-        r'(^\[\[package\]\]\nname = "linuxdo-accelerator"\nversion = ")[^"]+(")',
+        r'(^\[\[package\]\]\nname = "jireh-accelerator"\nversion = ")[^"]+(")',
         rf'\g<1>{package_version}\2',
     )
     replace_once(

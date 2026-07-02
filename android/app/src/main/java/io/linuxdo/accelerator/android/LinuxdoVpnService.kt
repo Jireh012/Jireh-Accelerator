@@ -1,4 +1,4 @@
-package io.linuxdo.accelerator.android
+package io.jireh.accelerator.android
 
 import android.app.ActivityManager
 import android.app.NotificationChannel
@@ -106,7 +106,7 @@ class LinuxdoVpnService : VpnService() {
                 Log.i(tag, "system dns servers=$systemDnsServers")
 
                 val vpn = Builder()
-                    .setSession("Linux.do Accelerator")
+                    .setSession("Jireh Accelerator")
                     .setMtu(1500)
                     .addAddress(VPN_CLIENT_IP, 24)
                     .addRoute(VPN_DNS_IP, 32)
@@ -332,7 +332,7 @@ class LinuxdoVpnService : VpnService() {
         val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channel = NotificationChannel(
             NOTIFICATION_CHANNEL_ID,
-            "Linux.do Accelerator",
+            "Jireh Accelerator",
             NotificationManager.IMPORTANCE_LOW,
         )
         manager.createNotificationChannel(channel)
@@ -365,9 +365,9 @@ class LinuxdoVpnService : VpnService() {
     }
 
     companion object {
-        const val ACTION_START = "io.linuxdo.accelerator.android.action.START"
-        const val ACTION_STOP = "io.linuxdo.accelerator.android.action.STOP"
-        const val ACTION_STATUS = "io.linuxdo.accelerator.android.action.STATUS"
+        const val ACTION_START = "io.jireh.accelerator.android.action.START"
+        const val ACTION_STOP = "io.jireh.accelerator.android.action.STOP"
+        const val ACTION_STATUS = "io.jireh.accelerator.android.action.STATUS"
         const val EXTRA_RUNNING = "extra_running"
         const val EXTRA_STATUS = "extra_status"
         const val EXTRA_DETAIL = "extra_detail"
@@ -376,7 +376,7 @@ class LinuxdoVpnService : VpnService() {
         private const val PREF_RUNNING = "running"
         private const val PREF_STATUS = "status"
         private const val PREF_DETAIL = "detail"
-        private const val NOTIFICATION_CHANNEL_ID = "linuxdo-accelerator"
+        private const val NOTIFICATION_CHANNEL_ID = "jireh-accelerator"
         private const val NOTIFICATION_ID = 101
         private const val VPN_CLIENT_IP = "10.77.0.1"
         private const val VPN_DNS_IP = "10.77.0.2"

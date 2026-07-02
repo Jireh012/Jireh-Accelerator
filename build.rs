@@ -1,5 +1,6 @@
 fn main() {
     println!("cargo:rerun-if-changed=assets/icons/linuxdo.ico");
+    println!("cargo:rerun-if-changed=assets/icons/icon-source.png");
     println!("cargo:rerun-if-env-changed=LINUXDO_BUILD_VERSION");
     println!("cargo:rerun-if-env-changed=RELEASE_VERSION");
     println!("cargo:rerun-if-env-changed=LINUXDO_GIT_HASH");

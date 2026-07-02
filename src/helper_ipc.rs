@@ -2,12 +2,12 @@ use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::state::ServiceState;
 
-const SOCKET_NAME: &str = "io.linuxdo.accelerator.helper.sock";
+const SOCKET_NAME: &str = "io.jireh.accelerator.helper.sock";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum HelperRequest {

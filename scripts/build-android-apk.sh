@@ -13,7 +13,7 @@ ANDROID_ABI="${ANDROID_ABI:-arm64-v8a}"
 RUST_TARGET="${RUST_TARGET:-aarch64-linux-android}"
 ANDROID_BUILD_TYPE="${ANDROID_BUILD_TYPE:-release}"
 ANDROID_API_LEVEL="${ANDROID_API_LEVEL:-35}"
-APK_OUTPUT_NAME="${APK_OUTPUT_NAME:-linuxdo-accelerator-android-${ANDROID_ABI}.apk}"
+APK_OUTPUT_NAME="${APK_OUTPUT_NAME:-jireh-accelerator-android-${ANDROID_ABI}.apk}"
 APK_OUTPUT_DIR="${APK_OUTPUT_DIR:-$REPO_ROOT/android/dist}"
 
 if [[ "$ANDROID_ABI" != "arm64-v8a" && "$ANDROID_ABI" != "x86_64" ]]; then
@@ -65,12 +65,12 @@ export ANDROID_NDK_HOME
   "build-tools;35.0.0"
 
 cd "$REPO_ROOT"
-cargo ndk -t "$ANDROID_ABI" -P "$ANDROID_API_LEVEL" build --release --bin linuxdo-accelerator
+cargo ndk -t "$ANDROID_ABI" -P "$ANDROID_API_LEVEL" build --release --bin jireh-accelerator
 
 build_type_lower="$(printf '%s' "$ANDROID_BUILD_TYPE" | tr '[:upper:]' '[:lower:]')"
 build_type_cap="$(printf '%s' "${build_type_lower:0:1}" | tr '[:lower:]' '[:upper:]')${build_type_lower:1}"
 
-export LINUXDO_ANDROID_RUST_BIN="$REPO_ROOT/target/$RUST_TARGET/release/linuxdo-accelerator"
+export LINUXDO_ANDROID_RUST_BIN="$REPO_ROOT/target/$RUST_TARGET/release/jireh-accelerator"
 "$GRADLE_HOME/bin/gradle" -p "$REPO_ROOT/android" "assemble${build_type_cap}"
 
 apk_source="$REPO_ROOT/android/app/build/outputs/apk/${build_type_lower}/app-${build_type_lower}.apk"

@@ -118,7 +118,7 @@ jobs:
           echo "${PWD}/.dmgbuild-venv/bin" >> "${GITHUB_PATH}"
 
       - name: Build binary
-        run: cargo build --release --locked --bin linuxdo-accelerator
+        run: cargo build --release --locked --bin jireh-accelerator
 
       - name: Package app
         run: ${{ matrix.package_cmd }}
@@ -130,10 +130,10 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linuxdo-accelerator-${{ steps.sync_version.outputs.asset_hash }}-${{ matrix.artifact_name }}
+          name: jireh-accelerator-${{ steps.sync_version.outputs.asset_hash }}-${{ matrix.artifact_name }}
           path: |
             dist/**
-            target/release/linuxdo-accelerator*
+            target/release/jireh-accelerator*
 
   build-android:
     strategy:
@@ -227,7 +227,7 @@ jobs:
           ANDROID_ABI: ${{ matrix.abi }}
           RUST_TARGET: ${{ matrix.rust_target }}
           ANDROID_BUILD_TYPE: release
-          APK_OUTPUT_NAME: linuxdo-accelerator-${{ steps.sync_version.outputs.asset_hash }}-android-${{ matrix.abi }}.apk
+          APK_OUTPUT_NAME: jireh-accelerator-${{ steps.sync_version.outputs.asset_hash }}-android-${{ matrix.abi }}.apk
         run: |
           export ANDROID_NDK_HOME="${ANDROID_SDK_ROOT}/ndk/27.2.12479018"
           ./scripts/build-android-apk.sh
@@ -235,7 +235,7 @@ jobs:
       - name: Upload Android artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: linuxdo-accelerator-${{ steps.sync_version.outputs.asset_hash }}-${{ matrix.artifact_name }}
+          name: jireh-accelerator-${{ steps.sync_version.outputs.asset_hash }}-${{ matrix.artifact_name }}
           path: |
             android/dist/*.apk
 
@@ -254,7 +254,7 @@ jobs:
       - name: Download packaged artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: linuxdo-accelerator-*
+          pattern: jireh-accelerator-*
           path: release-artifacts
           merge-multiple: false
 
@@ -288,13 +288,13 @@ jobs:
           while IFS= read -r -d '' file; do
             rel_path="${file#release-artifacts/}"
             artifact_dir="${rel_path%%/*}"
-            platform="${artifact_dir#linuxdo-accelerator-${asset_hash}-}"
+            platform="${artifact_dir#jireh-accelerator-${asset_hash}-}"
             case "${file}" in
               *.tar.gz) ext="tar.gz" ;;
               *.AppImage) ext="AppImage" ;;
               *) ext="${file##*.}" ;;
             esac
-            cp "${file}" "${release_assets_dir}/linuxdo-accelerator-${asset_hash}-${platform}.${ext}"
+            cp "${file}" "${release_assets_dir}/jireh-accelerator-${asset_hash}-${platform}.${ext}"
           done < <(
             find release-artifacts -type f \
               \( -name '*.apk' -o -name '*.deb' -o -name '*.dmg' -o -name '*.exe' -o -name '*.msi' -o -name '*.zip' -o -name '*.tar.gz' -o -name '*.AppImage' \) \

@@ -5,4 +5,4 @@ export PATH="$HOME/.cargo/bin:$PATH"
 cd "$(dirname "$0")/.."
 
 cargo build --release
-sudo ./target/release/linuxdo-accelerator start
+sudo ./target/release/jireh-accelerator start

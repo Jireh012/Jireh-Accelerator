@@ -8,7 +8,7 @@ if [ "$1" = "configure" ]; then
     # GNOME Shell caches .desktop content in memory; a stale override pointing
     # to a removed binary causes "not found in PATH" errors until re-login.
     for home_dir in /home/*; do
-        user_desktop="$home_dir/.local/share/applications/linuxdo-accelerator.desktop"
+        user_desktop="$home_dir/.local/share/applications/jireh-accelerator.desktop"
         if [ -f "$user_desktop" ]; then
             rm -f "$user_desktop"
         fi

@@ -311,7 +311,7 @@ async fn proxy_handler(
     if !state.config.matches_proxy_host(&host) {
         return Ok(simple_response(
             StatusCode::BAD_GATEWAY,
-            "host is not managed by linuxdo-accelerator",
+            "host is not managed by jireh-accelerator",
         ));
     }
 

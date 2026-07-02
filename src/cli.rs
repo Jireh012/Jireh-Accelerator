@@ -10,7 +10,7 @@ use crate::gui;
 use crate::service;
 
 #[derive(Debug, Parser)]
-#[command(name = "linuxdo-accelerator")]
+#[command(name = "jireh-accelerator")]
 #[command(about = "linux.do accelerator CLI")]
 pub struct Cli {
     #[arg(long)]

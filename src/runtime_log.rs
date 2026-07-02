@@ -101,7 +101,7 @@ mod tests {
     fn create_test_dir(name: &str) -> PathBuf {
         let mut path = std::env::temp_dir();
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-        path.push(format!("linuxdo-accelerator-runtime-log-{name}-{id}"));
+        path.push(format!("jireh-accelerator-runtime-log-{name}-{id}"));
         if path.exists() {
             let _ = std::fs::remove_dir_all(&path);
         }
@@ -122,13 +122,13 @@ mod tests {
         let cert_dir = data_dir.join("certs");
 
         AppPaths {
-            config_path: config_dir.join("linuxdo-accelerator.toml"),
+            config_path: config_dir.join("jireh-accelerator.toml"),
             config_dir,
             data_dir,
             runtime_dir: runtime_dir.clone(),
             cert_dir,
             state_path: runtime_dir.join("service-state.json"),
-            pid_path: runtime_dir.join("linuxdo-accelerator.pid"),
+            pid_path: runtime_dir.join("jireh-accelerator.pid"),
             ui_lease_path: runtime_dir.join("ui-lease.json"),
             ui_window_path: runtime_dir.join("ui-window.json"),
             runtime_log_path: runtime_dir.join("operations.log"),
