@@ -2,12 +2,16 @@ use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 #[cfg(target_family = "unix")]
 use std::process::Command;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+#[cfg(unix)]
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use anyhow::{Context, Result, bail};
+#[cfg(unix)]
+use anyhow::Context;
+use anyhow::{Result, bail};
 use tokio::sync::watch;
 
 use crate::certs::{ensure_bundle, load_bundle};

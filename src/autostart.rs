@@ -4,9 +4,8 @@ use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
 use crate::platform::{is_elevated, run_elevated};
-#[cfg(not(target_os = "macos"))]
-use anyhow::bail;
-use anyhow::{Context, Result};
+#[cfg_attr(target_os = "macos", allow(unused_imports))]
+use anyhow::{Context, Result, bail};
 
 #[cfg(target_os = "macos")]
 const AUTOSTART_LABEL: &str = "io.jireh.accelerator";

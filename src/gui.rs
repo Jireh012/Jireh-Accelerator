@@ -322,11 +322,11 @@ pub fn run_tray_shell(config_path: PathBuf, _ready_file: Option<PathBuf>) -> Res
     }
 
     impl TrayShellApp {
-        fn ensure_tray_icon(&mut self, event_loop: &ActiveEventLoop, source: &'static str) {
-            if let Err(error) = self.create_tray_icon() {
+        fn ensure_tray_icon(&mut self, event_loop: &ActiveEventLoop, _source: &'static str) {
+            if let Err(_error) = self.create_tray_icon() {
                 #[cfg(target_os = "macos")]
                 log_macos_tray_event(&format!(
-                    "tray-shell create icon failed at {source}: {error:#}"
+                    "tray-shell create icon failed at {_source}: {_error:#}"
                 ));
                 event_loop.exit();
             }
