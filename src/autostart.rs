@@ -4,8 +4,7 @@ use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
 use crate::platform::{is_elevated, run_elevated};
-#[cfg_attr(target_os = "macos", allow(unused_imports))]
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 
 #[cfg(target_os = "macos")]
 const AUTOSTART_LABEL: &str = "io.jireh.accelerator";
@@ -61,7 +60,7 @@ fn platform_enable(exe: &Path, config_path: &Path) -> Result<()> {
     hide_windows_window(&mut command);
     let output = command.output().context("failed to invoke schtasks.exe")?;
     if !output.status.success() {
-        bail!(
+        ::anyhow::bail!(
             "schtasks /create failed: {}",
             windows_command_message(&output)
         );
@@ -87,7 +86,7 @@ fn platform_disable() -> Result<()> {
         hide_windows_window(&mut command);
         let output = command.output().context("failed to invoke schtasks.exe")?;
         if !output.status.success() {
-            bail!(
+            ::anyhow::bail!(
                 "schtasks /delete failed: {}",
                 windows_command_message(&output)
             );
@@ -149,7 +148,7 @@ fn remove_legacy_windows_run_entry() -> Result<()> {
         if stderr.contains("unable to find") || stderr.contains("找不到") {
             return Ok(());
         }
-        bail!(
+        ::anyhow::bail!(
             "reg delete failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         );
@@ -186,7 +185,7 @@ fn configure_windows_task_settings() -> Result<()> {
         .output()
         .context("failed to invoke powershell.exe")?;
     if !output.status.success() {
-        bail!(
+        ::anyhow::bail!(
             "Set-ScheduledTask settings failed: {}",
             windows_command_message(&output)
         );
@@ -449,7 +448,7 @@ pub fn ensure_privileged_helper_running(_config_path: &std::path::Path) -> Resul
         .status()
         .context("failed to execute pkexec")?;
     if !status.success() {
-        bail!("pkexec rejected the request or systemctl failed");
+        ::anyhow::bail!("pkexec rejected the request or systemctl failed");
     }
     std::thread::sleep(std::time::Duration::from_millis(500));
     Ok(())
@@ -557,7 +556,7 @@ WantedBy=multi-user.target
     let _ = fs::remove_file(&tmp);
 
     if !status.success() {
-        bail!("pkexec rejected the request or systemctl failed");
+        ::anyhow::bail!("pkexec rejected the request or systemctl failed");
     }
 
     // Give systemd a moment to start the helper.
@@ -589,7 +588,7 @@ pub fn uninstall_privileged_helper() -> Result<()> {
         .context("failed to execute pkexec")?;
 
     if !status.success() {
-        bail!("pkexec rejected the request or systemctl failed");
+        ::anyhow::bail!("pkexec rejected the request or systemctl failed");
     }
     Ok(())
 }
@@ -601,11 +600,11 @@ pub fn is_privileged_helper_installed() -> bool {
 }
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 pub fn install_privileged_helper(_exe: &std::path::Path, _config_path: &std::path::Path) -> Result<()> {
-    bail!("privileged helper is not supported on this platform")
+    ::anyhow::bail!("privileged helper is not supported on this platform")
 }
 #[cfg(not(any(target_os = "macos", target_os = "linux")))]
 pub fn uninstall_privileged_helper() -> Result<()> {
-    bail!("privileged helper is not supported on this platform")
+    ::anyhow::bail!("privileged helper is not supported on this platform")
 }
 
 #[cfg(target_os = "linux")]
@@ -706,12 +705,12 @@ fn strip_extended_length_prefix(value: String) -> String {
 
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 fn platform_enable(_exe: &Path, _config_path: &Path) -> Result<()> {
-    bail!("autostart is not supported on this platform")
+    ::anyhow::bail!("autostart is not supported on this platform")
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
 fn platform_disable() -> Result<()> {
-    bail!("autostart is not supported on this platform")
+    ::anyhow::bail!("autostart is not supported on this platform")
 }
 
 #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
