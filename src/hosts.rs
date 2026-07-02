@@ -1,3 +1,4 @@
+#[cfg(not(target_os = "android"))]
 use std::collections::HashSet;
 use std::fs;
 use std::path::PathBuf;
@@ -5,6 +6,7 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 
 use crate::config::AppConfig;
+#[cfg(not(target_os = "android"))]
 use crate::hosts_store::{
     ensure_hosts_backup, restore_hosts_from_backup, validate_hosts_backup, write_hosts_content,
 };

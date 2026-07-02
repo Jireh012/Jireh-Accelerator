@@ -4,6 +4,8 @@ use std::path::PathBuf;
 
 #[cfg(target_os = "windows")]
 use crate::platform::{is_elevated, run_elevated};
+#[cfg(not(target_os = "macos"))]
+use anyhow::bail;
 use anyhow::{Context, Result};
 
 #[cfg(target_os = "macos")]

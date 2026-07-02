@@ -126,19 +126,23 @@ fn default_app_dirs() -> Result<(PathBuf, PathBuf)> {
         }
     }
 
+    #[cfg(not(target_os = "android"))]
     let new_dirs = ProjectDirs::from("io", "jireh", "jireh-accelerator")
         .ok_or_else(|| anyhow!("failed to resolve platform application directories"))?;
-    let legacy_dirs = ProjectDirs::from("io", "linuxdo", "linuxdo-accelerator")
-        .ok_or_else(|| anyhow!("failed to resolve legacy application directories"))?;
-    let config_dir = prefer_existing_dir(
-        new_dirs.config_dir().to_path_buf(),
-        legacy_dirs.config_dir().to_path_buf(),
-    );
-    let data_dir = prefer_existing_dir(
-        new_dirs.data_local_dir().to_path_buf(),
-        legacy_dirs.data_local_dir().to_path_buf(),
-    );
-    Ok((config_dir, data_dir))
+    #[cfg(not(target_os = "android"))]
+    {
+        let legacy_dirs = ProjectDirs::from("io", "linuxdo", "linuxdo-accelerator")
+            .ok_or_else(|| anyhow!("failed to resolve legacy application directories"))?;
+        let config_dir = prefer_existing_dir(
+            new_dirs.config_dir().to_path_buf(),
+            legacy_dirs.config_dir().to_path_buf(),
+        );
+        let data_dir = prefer_existing_dir(
+            new_dirs.data_local_dir().to_path_buf(),
+            legacy_dirs.data_local_dir().to_path_buf(),
+        );
+        Ok((config_dir, data_dir))
+    }
 }
 
 #[cfg(target_os = "linux")]
