@@ -31,6 +31,19 @@ proxy_domains = [
     "*.zobook.top",
     "qqchat.top",
     "*.qqchat.top",
+    "endao.one",
+    "*.endao.one",
+    "edbooks.co",
+    "*.edbooks.co",
+    "ebook.endao.co",
+    "isbook.top",
+    "*.isbook.top",
+    "edbook.app",
+    "*.edbook.app",
+    "edread.cc",
+    "*.edread.cc",
+    "i.endao.shop",
+    "*.endao.shop",
 ]
 
 hosts_domains = [
@@ -86,6 +99,18 @@ hosts_domains = [
     "a.zobook.top",
     "qqchat.top",
     "www.qqchat.top",
+    "endao.one",
+    "www.endao.one",
+    "edbooks.co",
+    "www.edbooks.co",
+    "ebook.endao.co",
+    "isbook.top",
+    "www.isbook.top",
+    "edbook.app",
+    "www.edbook.app",
+    "edread.cc",
+    "www.edread.cc",
+    "i.endao.shop",
 ]
 
 certificate_domains = [
@@ -111,6 +136,24 @@ certificate_domains = [
     "qqchat.top",
     "www.qqchat.top",
     "*.qqchat.top",
+    "endao.one",
+    "www.endao.one",
+    "*.endao.one",
+    "edbooks.co",
+    "www.edbooks.co",
+    "*.edbooks.co",
+    "ebook.endao.co",
+    "isbook.top",
+    "www.isbook.top",
+    "*.isbook.top",
+    "edbook.app",
+    "www.edbook.app",
+    "*.edbook.app",
+    "edread.cc",
+    "www.edread.cc",
+    "*.edread.cc",
+    "i.endao.shop",
+    "*.endao.shop",
 ]
 
 ca_common_name = "Jireh Accelerator Root CA"

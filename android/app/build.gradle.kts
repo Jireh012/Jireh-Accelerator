@@ -32,8 +32,8 @@ android {
         applicationId = "io.jireh.accelerator.android"
         minSdk = 28
         targetSdk = 35
-        versionCode = 1016
-        versionName = "0.1.16"
+        versionCode = 1018
+        versionName = "0.1.18"
         buildConfigField("String", "GIT_HASH", "\"$gitHash\"")
     }
 

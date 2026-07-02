@@ -1,6 +1,6 @@
 [package]
 name = "jireh-accelerator"
-version = "0.1.17"
+version = "0.1.18"
 edition = "2024"
 build = "build.rs"
 authors = ["fjh1997 <549308442@qq.com>"]
