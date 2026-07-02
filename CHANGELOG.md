@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.1.16
+
+- 项目重命名为 **Jireh Accelerator**，应用名、二进制名与默认配置统一为 `jireh-accelerator` / `jireh-accelerator.toml`。
+- 新增加速站点：`wdbook.com`、`zzbook.cfd`、`e.zzbook.cfd`、`a.zobook.top`、`qqchat.top`、`dl.edhub.cc`、`wedevotebible.org` 等。
+- 替换为全新圆角应用图标，并优化 GUI 中配置路径等文字的字体显示（自动换行、可选中复制）。
+- 修复首次启动时配置文件不存在导致的迁移失败，并兼容旧版 `linuxdo-accelerator.toml` 与历史数据目录。
+- 清理 macOS `objc` 宏与未使用代码引发的编译警告。
+
 ## v0.1.15
 
 - 标题栏新增独立的“最小化到托盘”按钮（位于 `-` 与 `X` 左侧），Windows / Linux / macOS 三端均支持。点击后窗口隐藏到系统托盘（不再占用任务栏），单击托盘图标或托盘菜单“打开窗口”即可恢复。原有的 `-` 按钮恢复为常规的“最小化到任务栏/Dock”，不再自动进入托盘。
