@@ -2243,9 +2243,10 @@ impl AcceleratorApp {
                 ui,
                 "上游模式",
                 match self.config.upstream_mode {
-                    UpstreamMode::Auto => "auto（ECH 优先，必要时 SNI 伪造）",
+                    UpstreamMode::Auto => "auto（ECH 优先，必要时真实 SNI / SNI 伪造）",
                     UpstreamMode::Ech => "ech（仅 ECH）",
-                    UpstreamMode::Sni => "sni（仅 SNI 伪造）",
+                    UpstreamMode::Tls => "tls（真实 SNI，无 ECH）",
+                    UpstreamMode::Sni => "sni（SNI 伪造）",
                 },
             );
             if let Some(fake_sni) = self.config.fake_sni_for_upstream() {

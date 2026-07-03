@@ -15,6 +15,9 @@ pub enum UpstreamMode {
     #[default]
     Auto,
     Ech,
+    /// 普通 TLS，ClientHello SNI 使用真实域名（适用于 CloudFront 等必须匹配 SNI 的 CDN）
+    Tls,
+    /// SNI 伪造，ClientHello SNI 使用 fake_sni
     Sni,
 }
 
@@ -23,6 +26,7 @@ impl UpstreamMode {
         match value.trim().to_ascii_lowercase().as_str() {
             "auto" => Some(Self::Auto),
             "ech" => Some(Self::Ech),
+            "tls" => Some(Self::Tls),
             "sni" => Some(Self::Sni),
             _ => None,
         }
@@ -721,7 +725,7 @@ server_common_name = "linux.do"
             .insert("*.linux.do".to_string(), "ech".to_string());
         config
             .domain_modes
-            .insert("readmoo.com".to_string(), "sni".to_string());
+            .insert("readmoo.com".to_string(), "tls".to_string());
 
         assert_eq!(config.effective_upstream_mode("linux.do"), UpstreamMode::Ech);
         assert_eq!(
@@ -730,7 +734,7 @@ server_common_name = "linux.do"
         );
         assert_eq!(
             config.effective_upstream_mode("readmoo.com"),
-            UpstreamMode::Sni
+            UpstreamMode::Tls
         );
         assert_eq!(
             config.effective_upstream_mode("example.com"),
@@ -742,6 +746,7 @@ server_common_name = "linux.do"
     fn upstream_mode_parses_case_insensitive_values() {
         assert_eq!(UpstreamMode::parse("auto"), Some(UpstreamMode::Auto));
         assert_eq!(UpstreamMode::parse("ECH"), Some(UpstreamMode::Ech));
+        assert_eq!(UpstreamMode::parse("tls"), Some(UpstreamMode::Tls));
         assert_eq!(UpstreamMode::parse("sni"), Some(UpstreamMode::Sni));
         assert!(UpstreamMode::parse("invalid").is_none());
     }

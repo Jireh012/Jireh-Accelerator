@@ -420,6 +420,23 @@ async fn dispatch_upstream_request(
             )
             .await
         }
+        UpstreamMode::Tls => {
+            attempt_upstream_addrs(
+                state,
+                upstream_scheme,
+                request_host,
+                upstream_port,
+                &upstream.addrs,
+                "tls",
+                None,
+                None,
+                method,
+                headers,
+                body,
+                path_and_query,
+            )
+            .await
+        }
         UpstreamMode::Sni => {
             let outer_sni = fake_sni.ok_or_else(|| {
                 anyhow::anyhow!("SNI 伪造模式：{request_host} 需要配置 fake_sni")
@@ -484,26 +501,47 @@ async fn dispatch_upstream_request(
                     }
                 }
             } else {
-                let outer_sni = fake_sni.ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "auto 模式：{request_host} 无 ECH 配置，且未配置 fake_sni 以启用 SNI 伪造"
-                    )
-                })?;
-                attempt_upstream_addrs(
+                match attempt_upstream_addrs(
                     state,
                     upstream_scheme,
                     request_host,
                     upstream_port,
                     &upstream.addrs,
-                    "sni",
-                    Some(outer_sni),
+                    "tls",
                     None,
-                    method,
-                    headers,
-                    body,
+                    None,
+                    method.clone(),
+                    headers.clone(),
+                    body.clone(),
                     path_and_query,
                 )
                 .await
+                {
+                    Ok(response) => Ok(response),
+                    Err(error) => {
+                        let Some(outer_sni) = fake_sni else {
+                            return Err(error);
+                        };
+                        eprintln!(
+                            "auto 模式：{request_host} 真实 SNI 上游失败，回退到 SNI 伪造 ({outer_sni}): {error:#}"
+                        );
+                        attempt_upstream_addrs(
+                            state,
+                            upstream_scheme,
+                            request_host,
+                            upstream_port,
+                            &upstream.addrs,
+                            "sni-fallback",
+                            Some(outer_sni),
+                            None,
+                            method,
+                            headers,
+                            body,
+                            path_and_query,
+                        )
+                        .await
+                    }
+                }
             }
         }
     }
