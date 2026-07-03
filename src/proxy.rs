@@ -36,7 +36,7 @@ use tokio_rustls::rustls::pki_types::{CertificateDer, PrivateKeyDer};
 use tokio_rustls::rustls::{ClientConfig, DigitallySignedStruct, Error as RustlsError};
 
 use crate::certs::CertificateBundle;
-use crate::config::AppConfig;
+use crate::config::{AppConfig, UpstreamMode};
 use crate::paths::AppPaths;
 use crate::runtime_log;
 
@@ -396,24 +396,143 @@ async fn dispatch_upstream_request(
     path_and_query: &str,
 ) -> Result<UpstreamResponse> {
     let upstream = resolve_upstream(state, request_host, upstream_port).await?;
-    let ech_config = upstream
-        .ech_config
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("ECH 强制模式：{request_host} 未提供可用的 ECH 配置"))?;
+    let mode = state.config.effective_upstream_mode(request_host);
+    let fake_sni = state.config.fake_sni_for_upstream();
 
+    match mode {
+        UpstreamMode::Ech => {
+            let ech_config = upstream.ech_config.clone().ok_or_else(|| {
+                anyhow::anyhow!("ECH 模式：{request_host} 未提供可用的 ECH 配置")
+            })?;
+            attempt_upstream_addrs(
+                state,
+                upstream_scheme,
+                request_host,
+                upstream_port,
+                &upstream.addrs,
+                "ech",
+                None,
+                Some(ech_config),
+                method,
+                headers,
+                body,
+                path_and_query,
+            )
+            .await
+        }
+        UpstreamMode::Sni => {
+            let outer_sni = fake_sni.ok_or_else(|| {
+                anyhow::anyhow!("SNI 伪造模式：{request_host} 需要配置 fake_sni")
+            })?;
+            attempt_upstream_addrs(
+                state,
+                upstream_scheme,
+                request_host,
+                upstream_port,
+                &upstream.addrs,
+                "sni",
+                Some(outer_sni),
+                None,
+                method,
+                headers,
+                body,
+                path_and_query,
+            )
+            .await
+        }
+        UpstreamMode::Auto => {
+            if let Some(ech_config) = upstream.ech_config.clone() {
+                match attempt_upstream_addrs(
+                    state,
+                    upstream_scheme,
+                    request_host,
+                    upstream_port,
+                    &upstream.addrs,
+                    "ech",
+                    None,
+                    Some(ech_config),
+                    method.clone(),
+                    headers.clone(),
+                    body.clone(),
+                    path_and_query,
+                )
+                .await
+                {
+                    Ok(response) => Ok(response),
+                    Err(error) => {
+                        let Some(outer_sni) = fake_sni else {
+                            return Err(error);
+                        };
+                        eprintln!(
+                            "auto 模式：{request_host} ECH 上游失败，回退到 SNI 伪造 ({outer_sni}): {error:#}"
+                        );
+                        attempt_upstream_addrs(
+                            state,
+                            upstream_scheme,
+                            request_host,
+                            upstream_port,
+                            &upstream.addrs,
+                            "sni-fallback",
+                            Some(outer_sni),
+                            None,
+                            method,
+                            headers,
+                            body,
+                            path_and_query,
+                        )
+                        .await
+                    }
+                }
+            } else {
+                let outer_sni = fake_sni.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "auto 模式：{request_host} 无 ECH 配置，且未配置 fake_sni 以启用 SNI 伪造"
+                    )
+                })?;
+                attempt_upstream_addrs(
+                    state,
+                    upstream_scheme,
+                    request_host,
+                    upstream_port,
+                    &upstream.addrs,
+                    "sni",
+                    Some(outer_sni),
+                    None,
+                    method,
+                    headers,
+                    body,
+                    path_and_query,
+                )
+                .await
+            }
+        }
+    }
+}
+
+async fn attempt_upstream_addrs(
+    state: &AppState,
+    upstream_scheme: &str,
+    request_host: &str,
+    upstream_port: u16,
+    addrs: &[SocketAddr],
+    mode_label: &str,
+    outer_sni: Option<&str>,
+    ech_config: Option<EchConfig>,
+    method: Method,
+    headers: HeaderMap,
+    body: Bytes,
+    path_and_query: &str,
+) -> Result<UpstreamResponse> {
     let mut last_error = None;
-    for addr in upstream.addrs.iter().copied() {
+    for addr in addrs.iter().copied() {
         log_upstream_debug(
             state,
             request_host,
             path_and_query,
             &format!(
-                "attempt addr={addr} scheme={upstream_scheme} ech={} edge_node={}",
-                if upstream.ech_config.is_some() {
-                    "yes"
-                } else {
-                    "no"
-                },
+                "attempt mode={mode_label} addr={addr} scheme={upstream_scheme} sni={} ech={} edge_node={}",
+                outer_sni.unwrap_or(request_host),
+                if ech_config.is_some() { "yes" } else { "no" },
                 state
                     .config
                     .edge_node_override()
@@ -425,8 +544,8 @@ async fn dispatch_upstream_request(
             state,
             upstream_scheme,
             request_host,
-            None,
-            Some(ech_config.clone()),
+            outer_sni,
+            ech_config.clone(),
             addr,
             method.clone(),
             headers.clone(),
@@ -455,7 +574,7 @@ async fn dispatch_upstream_request(
                     request_host,
                     path_and_query,
                     &format!(
-                        "success addr={addr} protocol={} status={} cf-ray={} content-type={}",
+                        "success mode={mode_label} addr={addr} protocol={} status={} cf-ray={} content-type={}",
                         response.negotiated_protocol, status, cf_ray, content_type
                     ),
                 );
@@ -466,16 +585,19 @@ async fn dispatch_upstream_request(
                     state,
                     request_host,
                     path_and_query,
-                    &format!("failure addr={addr} error={error:#}"),
+                    &format!("failure mode={mode_label} addr={addr} error={error:#}"),
                 );
-                eprintln!("ech upstream attempt failed for {request_host} via {addr}: {error:#}");
+                eprintln!(
+                    "{mode_label} upstream attempt failed for {request_host} via {addr}: {error:#}"
+                );
                 last_error = Some(error);
             }
         }
     }
 
-    Err(last_error
-        .unwrap_or_else(|| anyhow::anyhow!("ECH 强制模式：{request_host} 所有上游地址都握手失败")))
+    Err(last_error.unwrap_or_else(|| {
+        anyhow::anyhow!("{mode_label} 模式：{request_host} 所有上游地址都握手失败")
+    }))
 }
 
 async fn send_once(

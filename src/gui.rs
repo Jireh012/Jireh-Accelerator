@@ -25,7 +25,7 @@ use tray_icon::{MouseButton, MouseButtonState, TrayIconEvent};
 
 use crate::autostart;
 use crate::branding;
-use crate::config::AppConfig;
+use crate::config::{AppConfig, UpstreamMode};
 #[cfg(target_os = "windows")]
 use crate::paths::AppPaths;
 use crate::platform::run_elevated;
@@ -2239,6 +2239,18 @@ impl AcceleratorApp {
             detail_value_row(ui, "解析优先", self.ip_preference_label());
             detail_value_row(ui, "边缘节点", self.edge_node_label());
             detail_value_row(ui, "上游", &self.config.upstream);
+            detail_value_row(
+                ui,
+                "上游模式",
+                match self.config.upstream_mode {
+                    UpstreamMode::Auto => "auto（ECH 优先，必要时 SNI 伪造）",
+                    UpstreamMode::Ech => "ech（仅 ECH）",
+                    UpstreamMode::Sni => "sni（仅 SNI 伪造）",
+                },
+            );
+            if let Some(fake_sni) = self.config.fake_sni_for_upstream() {
+                detail_value_row(ui, "伪造 SNI", fake_sni);
+            }
             detail_value_row(
                 ui,
                 "DoH 端点",

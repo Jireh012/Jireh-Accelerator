@@ -9,6 +9,26 @@ use serde::{Deserialize, Serialize};
 const DEFAULT_APP_CONFIG: &str = include_str!("../assets/defaults/jireh-accelerator.toml");
 const CURRENT_CONFIG_VERSION: &str = env!("LINUXDO_GIT_HASH");
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UpstreamMode {
+    #[default]
+    Auto,
+    Ech,
+    Sni,
+}
+
+impl UpstreamMode {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "auto" => Some(Self::Auto),
+            "ech" => Some(Self::Ech),
+            "sni" => Some(Self::Sni),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     #[serde(default = "default_listen_host")]
@@ -23,6 +43,10 @@ pub struct AppConfig {
     pub upstream: String,
     #[serde(default = "default_fake_sni")]
     pub fake_sni: Option<String>,
+    #[serde(default = "default_upstream_mode")]
+    pub upstream_mode: UpstreamMode,
+    #[serde(default)]
+    pub domain_modes: BTreeMap<String, String>,
     #[serde(default = "default_doh_endpoints")]
     pub doh_endpoints: Vec<String>,
     #[serde(default = "default_managed_prefer_ipv6")]
@@ -73,6 +97,10 @@ impl Default for AppConfig {
 
 fn default_fake_sni() -> Option<String> {
     Some("www.cloudflare.com".to_string())
+}
+
+fn default_upstream_mode() -> UpstreamMode {
+    default_app_config().upstream_mode
 }
 
 fn default_listen_host() -> String {
@@ -300,6 +328,8 @@ impl AppConfig {
             https_port: legacy.https_port,
             upstream: legacy.upstream,
             fake_sni: legacy.fake_sni,
+            upstream_mode: default_upstream_mode(),
+            domain_modes: BTreeMap::new(),
             doh_endpoints: legacy_network
                 .as_ref()
                 .map(|value| value.doh_endpoints.clone())
@@ -391,6 +421,39 @@ impl AppConfig {
             .map(str::trim)
             .filter(|value| !value.is_empty())
     }
+
+    pub fn effective_upstream_mode(&self, host: &str) -> UpstreamMode {
+        self.lookup_domain_mode(host)
+            .and_then(UpstreamMode::parse)
+            .unwrap_or(self.upstream_mode)
+    }
+
+    pub fn fake_sni_for_upstream(&self) -> Option<&str> {
+        self.fake_sni
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+    }
+
+    fn lookup_domain_mode(&self, host: &str) -> Option<&str> {
+        let candidate = host.to_ascii_lowercase();
+
+        if let Some(mode) = self.domain_modes.get(&candidate) {
+            return Some(mode.as_str());
+        }
+
+        self.domain_modes
+            .iter()
+            .filter_map(|(pattern, mode)| {
+                let pattern = pattern.to_ascii_lowercase();
+                let suffix = pattern.strip_prefix("*.")?;
+                candidate
+                    .ends_with(&format!(".{suffix}"))
+                    .then_some((suffix.len(), mode.as_str()))
+            })
+            .max_by_key(|(suffix_len, _)| *suffix_len)
+            .map(|(_, mode)| mode)
+    }
 }
 
 fn load_legacy_network_profile(path: &Path) -> Result<Option<LegacyNetworkProfile>> {
@@ -431,7 +494,7 @@ fn cleanup_legacy_network_profile(path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AppConfig, CURRENT_CONFIG_VERSION, DEFAULT_APP_CONFIG, backup_config_path,
+        AppConfig, CURRENT_CONFIG_VERSION, DEFAULT_APP_CONFIG, UpstreamMode, backup_config_path,
         version_marker_path,
     };
     use std::path::Path;
@@ -644,5 +707,42 @@ server_common_name = "linux.do"
         if path.exists() {
             let _ = std::fs::remove_dir_all(path);
         }
+    }
+
+    #[test]
+    fn effective_upstream_mode_respects_domain_overrides() {
+        let mut config = AppConfig::default();
+        config.upstream_mode = UpstreamMode::Auto;
+        config
+            .domain_modes
+            .insert("linux.do".to_string(), "ech".to_string());
+        config
+            .domain_modes
+            .insert("*.linux.do".to_string(), "ech".to_string());
+        config
+            .domain_modes
+            .insert("readmoo.com".to_string(), "sni".to_string());
+
+        assert_eq!(config.effective_upstream_mode("linux.do"), UpstreamMode::Ech);
+        assert_eq!(
+            config.effective_upstream_mode("www.linux.do"),
+            UpstreamMode::Ech
+        );
+        assert_eq!(
+            config.effective_upstream_mode("readmoo.com"),
+            UpstreamMode::Sni
+        );
+        assert_eq!(
+            config.effective_upstream_mode("example.com"),
+            UpstreamMode::Auto
+        );
+    }
+
+    #[test]
+    fn upstream_mode_parses_case_insensitive_values() {
+        assert_eq!(UpstreamMode::parse("auto"), Some(UpstreamMode::Auto));
+        assert_eq!(UpstreamMode::parse("ECH"), Some(UpstreamMode::Ech));
+        assert_eq!(UpstreamMode::parse("sni"), Some(UpstreamMode::Sni));
+        assert!(UpstreamMode::parse("invalid").is_none());
     }
 }

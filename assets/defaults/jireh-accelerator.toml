@@ -4,6 +4,7 @@ http_port = 80
 https_port = 443
 upstream = "https://linux.do"
 fake_sni = "www.cloudflare.com"
+upstream_mode = "auto"
 
 doh_endpoints = [
     "https://aaa.ddd.oaifree.com/query-dns",
@@ -31,6 +32,8 @@ proxy_domains = [
     "*.zobook.top",
     "qqchat.top",
     "*.qqchat.top",
+    "readmoo.com",
+    "*.readmoo.com",
 ]
 
 hosts_domains = [
@@ -86,6 +89,21 @@ hosts_domains = [
     "a.zobook.top",
     "qqchat.top",
     "www.qqchat.top",
+    "readmoo.com",
+    "www.readmoo.com",
+    "ap.readmoo.com",
+    "campaign.readmoo.com",
+    "cdn.readmoo.com",
+    "gateway.readmoo.com",
+    "member.readmoo.com",
+    "moopub.readmoo.com",
+    "new-read.readmoo.com",
+    "news.readmoo.com",
+    "next.readmoo.com",
+    "podcast.readmoo.com",
+    "read.readmoo.com",
+    "report.readmoo.com",
+    "share.readmoo.com",
 ]
 
 certificate_domains = [
@@ -111,7 +129,29 @@ certificate_domains = [
     "qqchat.top",
     "www.qqchat.top",
     "*.qqchat.top",
+    "readmoo.com",
+    "www.readmoo.com",
+    "*.readmoo.com",
 ]
 
 ca_common_name = "Jireh Accelerator Root CA"
 server_common_name = "linux.do"
+
+[domain_modes]
+"linux.do" = "ech"
+"*.linux.do" = "ech"
+"idcflare.com" = "ech"
+"*.idcflare.com" = "ech"
+"wdbook.com" = "ech"
+"*.wdbook.com" = "ech"
+"zzbook.cfd" = "ech"
+"*.zzbook.cfd" = "ech"
+"dl.edhub.cc" = "ech"
+"wedevotebible.org" = "ech"
+"*.wedevotebible.org" = "ech"
+"zobook.top" = "ech"
+"*.zobook.top" = "ech"
+"qqchat.top" = "ech"
+"*.qqchat.top" = "ech"
+"readmoo.com" = "sni"
+"*.readmoo.com" = "sni"

@@ -1,6 +1,6 @@
-import java.io.ByteArrayOutputStream
 import org.gradle.api.GradleException
 import org.gradle.api.tasks.Sync
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("com.android.application")
@@ -14,13 +14,15 @@ val rustBinaryProvider = providers
     .orElse(repoRoot.resolve("target/aarch64-linux-android/release/jireh-accelerator").absolutePath)
 val gitHash: String = providers.environmentVariable("LINUXDO_GIT_HASH").getOrElse(
     runCatching {
-        val output = ByteArrayOutputStream()
-        exec {
-            commandLine("git", "rev-parse", "--short=12", "HEAD")
-            workingDir(repoRoot)
-            standardOutput = output
-        }
-        output.toString().trim().ifEmpty { null }
+        ProcessBuilder("git", "rev-parse", "--short=12", "HEAD")
+            .directory(repoRoot)
+            .redirectErrorStream(true)
+            .start()
+            .inputStream
+            .bufferedReader()
+            .readText()
+            .trim()
+            .ifEmpty { null }
     }.getOrNull() ?: "unknown"
 )
 
@@ -53,12 +55,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     sourceSets.named("main") {
         assets.srcDir(generatedAssetsDir)
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 
