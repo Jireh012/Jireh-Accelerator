@@ -32,8 +32,6 @@ proxy_domains = [
     "*.zobook.top",
     "qqchat.top",
     "*.qqchat.top",
-    "readmoo.com",
-    "*.readmoo.com",
     "endao.one",
     "*.endao.one",
     "edbooks.co",
@@ -102,21 +100,6 @@ hosts_domains = [
     "a.zobook.top",
     "qqchat.top",
     "www.qqchat.top",
-    "readmoo.com",
-    "www.readmoo.com",
-    "ap.readmoo.com",
-    "campaign.readmoo.com",
-    "cdn.readmoo.com",
-    "gateway.readmoo.com",
-    "member.readmoo.com",
-    "moopub.readmoo.com",
-    "new-read.readmoo.com",
-    "news.readmoo.com",
-    "next.readmoo.com",
-    "podcast.readmoo.com",
-    "read.readmoo.com",
-    "report.readmoo.com",
-    "share.readmoo.com",
     "endao.one",
     "www.endao.one",
     "edbooks.co",
@@ -154,9 +137,6 @@ certificate_domains = [
     "qqchat.top",
     "www.qqchat.top",
     "*.qqchat.top",
-    "readmoo.com",
-    "www.readmoo.com",
-    "*.readmoo.com",
     "endao.one",
     "www.endao.one",
     "*.endao.one",
@@ -196,8 +176,6 @@ server_common_name = "linux.do"
 "*.zobook.top" = "ech"
 "qqchat.top" = "ech"
 "*.qqchat.top" = "ech"
-"readmoo.com" = "tls"
-"*.readmoo.com" = "tls"
 "endao.one" = "ech"
 "*.endao.one" = "ech"
 "edbooks.co" = "ech"

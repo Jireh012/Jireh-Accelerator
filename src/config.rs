@@ -15,7 +15,7 @@ pub enum UpstreamMode {
     #[default]
     Auto,
     Ech,
-    /// 普通 TLS，ClientHello SNI 使用真实域名（适用于 CloudFront 等必须匹配 SNI 的 CDN）
+    /// 普通 TLS，ClientHello SNI 使用真实域名（适用于不支持 ECH 且必须匹配 SNI 的上游）
     Tls,
     /// SNI 伪造，ClientHello SNI 使用 fake_sni
     Sni,
@@ -725,7 +725,7 @@ server_common_name = "linux.do"
             .insert("*.linux.do".to_string(), "ech".to_string());
         config
             .domain_modes
-            .insert("readmoo.com".to_string(), "tls".to_string());
+            .insert("legacy.example.com".to_string(), "tls".to_string());
 
         assert_eq!(config.effective_upstream_mode("linux.do"), UpstreamMode::Ech);
         assert_eq!(
@@ -733,7 +733,7 @@ server_common_name = "linux.do"
             UpstreamMode::Ech
         );
         assert_eq!(
-            config.effective_upstream_mode("readmoo.com"),
+            config.effective_upstream_mode("legacy.example.com"),
             UpstreamMode::Tls
         );
         assert_eq!(
