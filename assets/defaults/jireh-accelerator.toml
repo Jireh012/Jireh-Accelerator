@@ -34,6 +34,19 @@ proxy_domains = [
     "*.qqchat.top",
     "readmoo.com",
     "*.readmoo.com",
+    "endao.one",
+    "*.endao.one",
+    "edbooks.co",
+    "*.edbooks.co",
+    "ebook.endao.co",
+    "isbook.top",
+    "*.isbook.top",
+    "edbook.app",
+    "*.edbook.app",
+    "edread.cc",
+    "*.edread.cc",
+    "i.endao.shop",
+    "*.endao.shop",
 ]
 
 hosts_domains = [
@@ -104,6 +117,18 @@ hosts_domains = [
     "read.readmoo.com",
     "report.readmoo.com",
     "share.readmoo.com",
+    "endao.one",
+    "www.endao.one",
+    "edbooks.co",
+    "www.edbooks.co",
+    "ebook.endao.co",
+    "isbook.top",
+    "www.isbook.top",
+    "edbook.app",
+    "www.edbook.app",
+    "edread.cc",
+    "www.edread.cc",
+    "i.endao.shop",
 ]
 
 certificate_domains = [
@@ -132,6 +157,24 @@ certificate_domains = [
     "readmoo.com",
     "www.readmoo.com",
     "*.readmoo.com",
+    "endao.one",
+    "www.endao.one",
+    "*.endao.one",
+    "edbooks.co",
+    "www.edbooks.co",
+    "*.edbooks.co",
+    "ebook.endao.co",
+    "isbook.top",
+    "www.isbook.top",
+    "*.isbook.top",
+    "edbook.app",
+    "www.edbook.app",
+    "*.edbook.app",
+    "edread.cc",
+    "www.edread.cc",
+    "*.edread.cc",
+    "i.endao.shop",
+    "*.endao.shop",
 ]
 
 ca_common_name = "Jireh Accelerator Root CA"
@@ -155,3 +198,16 @@ server_common_name = "linux.do"
 "*.qqchat.top" = "ech"
 "readmoo.com" = "sni"
 "*.readmoo.com" = "sni"
+"endao.one" = "ech"
+"*.endao.one" = "ech"
+"edbooks.co" = "ech"
+"*.edbooks.co" = "ech"
+"ebook.endao.co" = "ech"
+"isbook.top" = "ech"
+"*.isbook.top" = "ech"
+"edbook.app" = "ech"
+"*.edbook.app" = "ech"
+"edread.cc" = "ech"
+"*.edread.cc" = "ech"
+"i.endao.shop" = "ech"
+"*.endao.shop" = "ech"

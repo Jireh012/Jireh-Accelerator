@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.18
+
+- 新增加速站点：恩道出版相关域名，包括 `endao.one`、`edbooks.co`、`ebook.endao.co`、`isbook.top`、`edbook.app`、`edread.cc`、`i.endao.shop` 及其子域。
+
 ## v0.1.16
 
 - 项目重命名为 **Jireh Accelerator**，应用名、二进制名与默认配置统一为 `jireh-accelerator` / `jireh-accelerator.toml`。
